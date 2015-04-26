@@ -185,12 +185,14 @@ void print_display_short_hex(unsigned short n)
 }
 
 
+void print_ssdbg_hex(unsigned long n);
 void print_ssdbg_hex(unsigned long n)
 {
   // Redirection to the debug USART.
   print_hex(SSDBG_USART, n);
 }
 
+void print_display_hex(unsigned long n);
 void print_display_hex(unsigned long n)
 {
 	// Redirection to the debug USART.

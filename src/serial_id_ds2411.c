@@ -8,7 +8,7 @@
 
 #define SS_ONE_MICROSECOND 8
 
-
+unsigned char io_pin(unsigned char idx);
 unsigned char io_pin(unsigned char idx)
 {
 	switch (idx)
@@ -28,10 +28,13 @@ unsigned char io_pin(unsigned char idx)
 		case 4:
 			return SEALSHIELD_SERIAL_ID4;
 			break;
+		default: 
+			return 0; //TODO: return a better error code here
+			break;
 	}
 }
 
-
+void drive_DQ_low(unsigned char idx);
 void drive_DQ_low(unsigned char idx)
 {
 	unsigned char ioPin;
@@ -41,6 +44,7 @@ void drive_DQ_low(unsigned char idx)
 	gpio_set_pin_low(ioPin);
 }
 
+void release_the_bus(unsigned char idx);
 void release_the_bus(unsigned char idx)
 {
 	unsigned char ioPin;
@@ -51,6 +55,7 @@ void release_the_bus(unsigned char idx)
 	
 }
 
+unsigned char sample_line(unsigned char idx);
 unsigned char sample_line(unsigned char idx)
 {
 		uint32_t ioFlags;
@@ -131,6 +136,7 @@ int OWTouchReset(unsigned char idx)
 //-----------------------------------------------------------------------------
 // Send a 1-Wire write bit. Provide 10us recovery time.
 //
+void OWWriteBit(unsigned char idx, int bit);
 void OWWriteBit(unsigned char idx, int bit)
 {
 	if (bit)
@@ -154,6 +160,7 @@ void OWWriteBit(unsigned char idx, int bit)
 //-----------------------------------------------------------------------------
 // Read a bit from the 1-Wire bus and return it. Provide 10us recovery time.
 //
+int OWReadBit(unsigned char idx);
 int OWReadBit(unsigned char idx)
 {
 	int result;
@@ -207,6 +214,7 @@ int OWReadByte(unsigned char idx)
 //-----------------------------------------------------------------------------
 // Write a 1-Wire data byte and return the sampled result.
 //
+int OWTouchByte(unsigned char idx, int data);
 int OWTouchByte(unsigned char idx, int data)
 {
 	int loop, result=0;
@@ -235,6 +243,7 @@ int OWTouchByte(unsigned char idx, int data)
 // Write a block 1-Wire data bytes and return the sampled result in the same
 // buffer.
 //
+void OWBlock(unsigned char idx, unsigned char *data, int data_len);
 void OWBlock(unsigned char idx, unsigned char *data, int data_len)
 {
 	int loop;
@@ -249,6 +258,7 @@ void OWBlock(unsigned char idx, unsigned char *data, int data_len)
 // Set all devices on 1-Wire to overdrive speed. Return '1' if at least one
 // overdrive capable device is detected.
 //
+int OWOverdriveSkip(unsigned char idx, unsigned char *data, int data_len);
 int OWOverdriveSkip(unsigned char idx, unsigned char *data, int data_len)
 {
 	// set the speed to 'standard'
@@ -272,6 +282,7 @@ int OWOverdriveSkip(unsigned char idx, unsigned char *data, int data_len)
 // Read and return the page data and SHA-1 message authentication code (MAC)
 // from a DS2432.
 //
+int ReadPageMAC(unsigned char idx, int page, unsigned char *page_data, unsigned char *mac);
 int ReadPageMAC(unsigned char idx, int page, unsigned char *page_data, unsigned char *mac)
 {
 	int i;

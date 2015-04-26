@@ -140,7 +140,7 @@ unsigned char* cmdPtrArray[10] = {
 	&CMD_SHELF2[0],
 	&CMD_SHELF3[0],
 	&CMD_SHELF4[0],
-	&CMD_CLEAR
+	&CMD_CLEAR[0]
 };
 
 enum {
@@ -188,6 +188,7 @@ unsigned char devicesPresentOnShelf[NUM_SHELVES];
 unsigned char shelfActive[NUM_SHELVES];
 
 
+void display_text(unsigned char idx);
 void display_text(unsigned char idx)
 {
 	for (int i = 0; i<7; i++)
@@ -197,6 +198,7 @@ void display_text(unsigned char idx)
 	
 }
 
+void init_io(void);
 void init_io(void)
 {
 	uint32_t ioFlags;
@@ -255,6 +257,7 @@ enum {
 int ledBoardPresent[NUM_LED_BOARDS];
 
 /* One serial ID chip per board */
+void read_serial_ids(void);
 void read_serial_ids(void)
 {
 	/*
@@ -291,6 +294,7 @@ enum {
 };
 
 /* Each side of an LED board will get different usage */
+unsigned char check_led_brd_side_lifetime(unsigned char ledBrdPosition);
 unsigned char check_led_brd_side_lifetime(unsigned char ledBrdPosition)
 {
 	/*
@@ -307,6 +311,7 @@ unsigned char check_led_brd_side_lifetime(unsigned char ledBrdPosition)
 }
 
 /* Aggregate the information */
+void check_led_brd_side_lifetimes(void);
 void check_led_brd_side_lifetimes(void)
 {
 	for (int i=0; i<NUM_LED_BOARD_SIDES; i++)
@@ -379,6 +384,7 @@ adcifa_sequence_conversion_opt_seq1_shelf4[NUMBER_OF_INPUTS_ADC_SEQ1] = {
 
 volatile avr32_adcifa_t *adcifa = &AVR32_ADCIFA; // ADCIFA IP registers address
 
+int16_t adc_process_task(unsigned char shelfIdx);
 int16_t adc_process_task(unsigned char shelfIdx)
 {
 	int32_t i;
@@ -488,6 +494,7 @@ enum {
 	DEVICES_PRESENT
 };
 
+unsigned char check_shelf_for_devices(unsigned char shelfPosition);
 unsigned char check_shelf_for_devices(unsigned char shelfPosition)
 {
 	U16 bluesense;
@@ -533,6 +540,7 @@ unsigned char check_shelf_for_devices(unsigned char shelfPosition)
 	return retVal;
 }
 
+void check_shelves_for_devices(void);
 void check_shelves_for_devices(void)
 {
 	for (int i=0; i<NUM_SHELVES; i++)
@@ -548,11 +556,10 @@ unsigned char shelfPresent[NUM_SHELVES] = {0,0,0,0};
 
 unsigned char topEflag0, topEflag1, botEflag0, botEflag1;
 
+void set_shelves_active_inactive(void);
 void set_shelves_active_inactive(void)
 {
 	numActiveShelves = 0;
-	
-	unsigned char tmp1, tmp2, tmp3, tmp4;
 	
 /*
  * Test which shelves are present in the system.
@@ -566,6 +573,9 @@ void set_shelves_active_inactive(void)
 
 #if 0	//TODO: NOTE we can't do this right now, turn all the shelves on full power at once, because the power supply can't supply it. Also not sure how to use the LED driver chip to check for LED shorts and opens
 		//it's more complicated than it looks, fix this later.
+
+	unsigned char tmp1, tmp2, tmp3, tmp4;
+
 	led_shelf(0, LED_ON);
 	led_shelf(1, LED_ON);
 	led_shelf(2, LED_ON);
@@ -672,6 +682,7 @@ void set_shelves_active_inactive(void)
 	}
 }
 
+unsigned char num_active_shelves(void);
 unsigned char num_active_shelves(void)
 {
 	return numActiveShelves;
@@ -683,6 +694,7 @@ unsigned char num_active_shelves(void)
 /*
  * Using RC8M (internal 8MHz)
  */
+void init_sys_clocks(void);
 void init_sys_clocks(void)
 {
 	scif_gclk_opt_t gclkOpt = {SCIF_GCCTRL_RC8M, 0,0};
@@ -727,6 +739,7 @@ enum state_function {
  *
  *
  */
+void adc_process_init(void);
 void adc_process_init(void)
 {
 	// GPIO pin/adc-function map.
@@ -761,6 +774,7 @@ void adc_process_init(void)
  *
  *
  */
+static void twi_init(void);
 static void twi_init(void)
 {
 	const gpio_map_t PCA9952_TWI_GPIO_MAP = {
@@ -805,6 +819,7 @@ enum {
 	STATE_SHUTDOWN_PROCESSES
 };
 
+unsigned long calc_sanitize_time(unsigned char shelfIdx);
 unsigned long calc_sanitize_time(unsigned char shelfIdx)
 {
 	uint32_t cyclesPerSec;
@@ -828,6 +843,7 @@ unsigned char sealShieldState;
 unsigned char anyShelvesStillSanitizing;
 
 
+void door_latch_open_kill_all_shelves(void);
 void door_latch_open_kill_all_shelves(void)
 {
 	led_shelf(0, LED_OFF);

@@ -178,7 +178,7 @@ void PCA9952_init(void) //7apr15
 }
 
 
-
+void PCA9952_channel(unsigned char topBotn, unsigned char channel, unsigned char onOffn);
 void PCA9952_channel(unsigned char topBotn, unsigned char channel, unsigned char onOffn)
 {
 	unsigned char regIdx, regPos, regShadow, maskVal, writeVal;
