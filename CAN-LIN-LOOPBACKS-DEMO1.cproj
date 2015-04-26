@@ -756,13 +756,7 @@
     <None Include="src\ASF\common\utils\parts.h">
       <SubType>compile</SubType>
     </None>
-    <None Include="src\lin_task.h">
-      <SubType>compile</SubType>
-    </None>
     <None Include="src\config\conf_ebi.h">
-      <SubType>compile</SubType>
-    </None>
-    <None Include="src\background_image.h">
       <SubType>compile</SubType>
     </None>
     <None Include="src\ASF\avr32\utils\preprocessor\tpaste.h">
@@ -772,9 +766,6 @@
       <SubType>compile</SubType>
     </None>
     <None Include="src\ASF\avr32\drivers\usart\usart.h">
-      <SubType>compile</SubType>
-    </None>
-    <None Include="src\controller.h">
       <SubType>compile</SubType>
     </None>
     <None Include="src\ASF\common\boards\board.h">
@@ -796,9 +787,6 @@
       <SubType>compile</SubType>
     </None>
     <None Include="src\ASF\common\services\clock\uc3c\genclk.h">
-      <SubType>compile</SubType>
-    </None>
-    <None Include="src\gui.h">
       <SubType>compile</SubType>
     </None>
     <None Include="src\ASF\avr32\drivers\pm\power_clocks_lib.h">
@@ -829,9 +817,6 @@
       <SubType>compile</SubType>
     </None>
     <None Include="src\ASF\avr32\components\display\et024006dhu\smc_et024006dhu.h">
-      <SubType>compile</SubType>
-    </None>
-    <None Include="src\can_task.h">
       <SubType>compile</SubType>
     </None>
     <None Include="src\ASF\avr32\drivers\adcifa\adcifa.h">
@@ -972,22 +957,7 @@
     <None Include="src\pca9952.h">
       <SubType>compile</SubType>
     </None>
-    <None Include="src\background_image.c">
-      <SubType>compile</SubType>
-    </None>
-    <None Include="src\can_task.c">
-      <SubType>compile</SubType>
-    </None>
     <None Include="src\config\conf_at42qt1060.h">
-      <SubType>compile</SubType>
-    </None>
-    <None Include="src\controller.c">
-      <SubType>compile</SubType>
-    </None>
-    <None Include="src\gui.c">
-      <SubType>compile</SubType>
-    </None>
-    <None Include="src\lin_task.c">
       <SubType>compile</SubType>
     </None>
     <Compile Include="src\main.c">
