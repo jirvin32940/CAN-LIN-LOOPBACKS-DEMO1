@@ -680,14 +680,6 @@ unsigned char num_active_shelves(void)
 
 /*! \brief Initializes the MCU system clocks.
  */
-#if 0 //7apr15 we are using RC8M, not an external crystal
-void init_sys_clocks(void)
-{
-	pcl_switch_to_osc(PCL_OSC0, FOSC0, OSC0_STARTUP);
-}
-#endif //7apr15
-
-
 /*
  * Using RC8M (internal 8MHz)
  */
@@ -730,135 +722,6 @@ enum state_function {
 	STATE_FCT_ZOOM
 };
 
-static enum state_master state = STATE_IDLE;
-static enum state_function state_fct = STATE_FCT_IDLE;
-static bool new_state_fct = false;
-
-/*! \brief Global State Machine:
- *        - Function Idle
- *        - Function Zoom
- */
-
-static bool state_machine_global(int source_id, enum state_function *state)
-{
-#if 0 //6apr15
-	switch (*state) {
-		case STATE_FCT_IDLE:
-			if (source_id == GUI_SOURCE1_ID) {
-				if (new_state_fct) {
-					gui_set_selection(GUI_SOURCE1_ID);
-				}
-			}
-			else if (source_id == GUI_OUTPUT1_ID) {
-				if (new_state_fct) {
-					gui_set_selection(GUI_OUTPUT1_ID);
-				}
-			}
-			else if (source_id == GUI_OUTPUT2_ID) {
-				if (new_state_fct) {
-					gui_set_selection(GUI_OUTPUT2_ID);
-				}
-			}
-			else if (source_id == GUI_OUTPUT3_ID) {
-				if (new_state_fct) {
-					gui_set_selection(GUI_OUTPUT3_ID);
-				}
-			}
-			break;
-		// Not Implemented
-		case STATE_FCT_FUNCTION1:
-			break;
-		// Not Implemented
-		case STATE_FCT_FUNCTION2:
-			break;
-		// Not Implemented
-		case STATE_FCT_FUNCTION3:
-			break;
-		// Not Implemented
-		case STATE_FCT_FUNCTION4:
-			break;
-		// Zoom
-		case STATE_FCT_ZOOM:
-			if (new_state_fct) {
-				zoom_view = true;
-				if (source_id == GUI_SOURCE1_ID)
-					zoom_view_id = GUI_SOURCE1_ID;
-				else if (source_id == GUI_OUTPUT1_ID)
-					zoom_view_id = GUI_OUTPUT1_ID;
-				else if (source_id == GUI_OUTPUT2_ID)
-					zoom_view_id = GUI_OUTPUT2_ID;
-				else if (source_id == GUI_OUTPUT3_ID)
-					zoom_view_id = GUI_OUTPUT3_ID;
-			}
-			break;
-	}
-#endif //6apr15
-	return true;
-}
-
-/*! \brief Navigation State Machine:
- *        - STATE_SOURCE1, STATE_OUTPUT1, STATE_OUTPUT2, OUTPUT3
- *
- */
-static void state_machine_task(void)
-{
-#if 0 //6apr15
-	// Set function state
-	if (controller_key_fct5()) {
-		state_fct = STATE_FCT_ZOOM;
-		new_state_fct = true;
-	}
-	else if (controller_key_fct1()) {
-		state_fct = STATE_FCT_IDLE;
-		state = STATE_SOURCE1;
-		new_state_fct = true;
-	}
-	else if (controller_key_fct2()) {
-		state_fct = STATE_FCT_IDLE;
-		state = STATE_OUTPUT1;
-		new_state_fct = true;
-	}
-	else if (controller_key_fct3()) {
-		state_fct = STATE_FCT_IDLE;
-		state = STATE_OUTPUT2;
-		new_state_fct = true;
-	}
-	else if (controller_key_fct4()) {
-		state_fct = STATE_FCT_IDLE;
-		state = STATE_OUTPUT3;
-		new_state_fct = true;
-	}
-	// Clear Zoom state if on and a key is pressed
-	if (zoom_view && !controller_key_fct5()) {
-		zoom_view = false;
-		gui_clear_view();
-		new_state_fct = true;
-		state_fct = STATE_FCT_IDLE;
-	}
-
-	switch (state) {
-		case STATE_IDLE:
-			break;
-		case STATE_SOURCE1:
-			if (!state_machine_global(GUI_SOURCE1_ID, &state_fct))
-				return;
-			break;
-		case STATE_OUTPUT1:
-			if (!state_machine_global(GUI_OUTPUT1_ID, &state_fct))
-				return;
-			break;
-		case STATE_OUTPUT2:
-			if (!state_machine_global(GUI_OUTPUT2_ID, &state_fct))
-				return;
-			break;
-		case STATE_OUTPUT3:
-			if (!state_machine_global(GUI_OUTPUT3_ID, &state_fct))
-				return;
-			break;
-	}
-	new_state_fct = false;
-#endif //6apr15
-}
 
 /*! \brief ADC Process Init
  *
@@ -1011,15 +874,7 @@ int main(void)
 
 	gpio_set_pin_high(SEALSHIELD_LED_OEn); //make sure outputs are disabled at the chip level
 	PCA9952_init();
-
 	
-#if 0 //TODO: probably remove 5apr15
-	gui_init(FCPU_HZ, FHSB_HZ, FPBB_HZ, FPBA_HZ); // GUI, Controller and DSP process init
-	controller_init(FCPU_HZ, FHSB_HZ, FPBA_HZ, FPBB_HZ);
-	lin_task_init(); // Initialize LIN Interface
-	can_task_init(); // Initialize CAN Interface
-#endif
-
 	sealShieldState = STATE_SS_IDLE;
 	
 	//using this structure makes the timer IDs index-able
@@ -1036,15 +891,6 @@ int main(void)
 
 	// Main loop
 	while (true) {
-
-#if 0 //TODO: probably remove 5apr15
-		lin_task(); // Call Lin Task for communication management
-		can_task(); // Call CAN Task for communication management
-		gui_task(); // Call Gui Task for display update
-		controller_task(); // Call Controller Task for control Update
-		adc_process_task(); // Call ADC Task for sensors update
-		state_machine_task(); // Here add the other concurrent process
-#endif //TODO: probably remove 5apr15
 
 #if 0 //for debugging the serial ID chips
 		while(1)
@@ -1127,10 +973,6 @@ int main(void)
 				break;
 				
 			case STATE_SANITIZE_1:
-/*
- * Code specifically for the show, just turn on one shelf at a time, we need work on the power supply to get it up to full power (1A)
- */
-
 				display_text(IDX_CLEAR);
 				cpu_delay_ms(500, 8000000); //half second
 				
@@ -1170,48 +1012,6 @@ int main(void)
 						sanitizeIdx = 0; //12apr15 wrap around
 					} 
 				}
-
-/*
- * End of code specifically for the show
- */				
-
-				
-#if 0 //we will use this code in the production unit but for the show do one shelf at a time
-				anyShelvesStillSanitizing = 0;
-
-				for (int i=0; i<NUM_SHELVES; i++) {
-					if (shelfActive[i] == SHELF_ACTIVE)
-					{
-						if (!cpu_is_timeout(shelfTimerPtr[i])) {
-							anyShelvesStillSanitizing++;
-						}
-						else {
-							led_shelf(i, LED_OFF);
-						}
-						
-						if (!SS_DOOR_LATCHED) //check this often in the sanitize state, need to kill the shelves the instant the door opens for safety
-						{
-							door_latch_open_kill_all_shelves();
-							display_text(IDX_CLEAR);
-							cpu_delay_ms(1000, 8000000);
-							display_text(IDX_DIRTY);
-							display_text(IDX_DIRTY);
-						}
-					}
-				}
-				
-				if (!anyShelvesStillSanitizing) {
-					cpu_stop_timeout(shelfTimerPtr[0]);
-					cpu_stop_timeout(shelfTimerPtr[1]);
-					cpu_stop_timeout(shelfTimerPtr[2]);
-					cpu_stop_timeout(shelfTimerPtr[3]);
-					sealShieldState = STATE_START_CLEAN;
-					print_ssdbg("All shelves clean\r\n");
-//					display_text(IDX_CLEAR);
-					display_text(IDX_CLEAN);
-
-				}
-#endif				
 				break;
 				
 			case STATE_SANITIZE_2:

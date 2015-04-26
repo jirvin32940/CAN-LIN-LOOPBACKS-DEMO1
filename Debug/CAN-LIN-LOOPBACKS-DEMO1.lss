@@ -25,27 +25,27 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   ALLOC
  10 .comment      00000030  00000000  00000000  000080bd  2**0
                   CONTENTS, READONLY
- 11 .debug_aranges 00000818  00000000  00000000  000080f0  2**3
+ 11 .debug_aranges 00000808  00000000  00000000  000080f0  2**3
                   CONTENTS, READONLY, DEBUGGING
- 12 .debug_pubnames 0000167c  00000000  00000000  00008908  2**0
+ 12 .debug_pubnames 0000167c  00000000  00000000  000088f8  2**0
                   CONTENTS, READONLY, DEBUGGING
- 13 .debug_info   00015381  00000000  00000000  00009f84  2**0
+ 13 .debug_info   00015296  00000000  00000000  00009f74  2**0
                   CONTENTS, READONLY, DEBUGGING
- 14 .debug_abbrev 00001946  00000000  00000000  0001f305  2**0
+ 14 .debug_abbrev 0000190d  00000000  00000000  0001f20a  2**0
                   CONTENTS, READONLY, DEBUGGING
- 15 .debug_line   00007457  00000000  00000000  00020c4b  2**0
+ 15 .debug_line   0000742a  00000000  00000000  00020b17  2**0
                   CONTENTS, READONLY, DEBUGGING
- 16 .debug_frame  00001834  00000000  00000000  000280a4  2**2
+ 16 .debug_frame  000017fc  00000000  00000000  00027f44  2**2
                   CONTENTS, READONLY, DEBUGGING
- 17 .debug_str    0000439e  00000000  00000000  000298d8  2**0
+ 17 .debug_str    0000429a  00000000  00000000  00029740  2**0
                   CONTENTS, READONLY, DEBUGGING
- 18 .debug_loc    00002a78  00000000  00000000  0002dc76  2**0
+ 18 .debug_loc    00002a22  00000000  00000000  0002d9da  2**0
                   CONTENTS, READONLY, DEBUGGING
- 19 .debug_macinfo 00dad4f2  00000000  00000000  000306ee  2**0
+ 19 .debug_macinfo 00dad4f2  00000000  00000000  000303fc  2**0
                   CONTENTS, READONLY, DEBUGGING
  20 .stack        00001000  0000f000  0000f000  00000000  2**0
                   ALLOC
- 21 .debug_ranges 000007d0  00000000  00000000  00dddbe0  2**3
+ 21 .debug_ranges 000007c0  00000000  00000000  00ddd8f0  2**3
                   CONTENTS, READONLY, DEBUGGING
 
 Disassembly of section .reset:
@@ -9776,7 +9776,7 @@ unsigned char num_active_shelves(void)
 800062ee:	09 8c       	ld.ub	r12,r4[0x0]
 
 800062f0 <init_sys_clocks>:
-
+ */
 /*
  * Using RC8M (internal 8MHz)
  */
@@ -10114,11 +10114,7 @@ int main(void)
 800064f4:	f0 1f 03 0d 	mcall	80007128 <main+0xc7c>
 	PCA9952_init();
 800064f8:	f0 1f 03 0d 	mcall	8000712c <main+0xc80>
-	controller_init(FCPU_HZ, FHSB_HZ, FPBA_HZ, FPBB_HZ);
-	lin_task_init(); // Initialize LIN Interface
-	can_task_init(); // Initialize CAN Interface
-#endif
-
+	
 	sealShieldState = STATE_SS_IDLE;
 800064fc:	fe f9 0c 34 	ld.w	r9,pc[3124]
 80006500:	30 08       	mov	r8,0
@@ -10742,11 +10738,8 @@ __always_inline static void cpu_delay_ms(unsigned long delay, unsigned long fcpu
 800069ba:	b2 88       	st.b	r9[0x0],r8
 				break;
 800069bc:	e0 8f 02 5c 	bral	80006e74 <main+0x9c8>
+				
 			case STATE_SANITIZE_1:
-/*
- * Code specifically for the show, just turn on one shelf at a time, we need work on the power supply to get it up to full power (1A)
- */
-
 				display_text(IDX_CLEAR);
 800069c0:	30 9c       	mov	r12,9
 800069c2:	f0 1f 01 d6 	mcall	80007118 <main+0xc6c>
@@ -11016,11 +11009,11 @@ __always_inline static void cpu_set_timeout(unsigned long delay, t_cpu_time *cpu
 80006bc6:	fe f9 05 6a 	ld.w	r9,pc[1386]
 80006bca:	30 68       	mov	r8,6
 80006bcc:	b2 88       	st.b	r9[0x0],r8
-//					display_text(IDX_CLEAR);
-					display_text(IDX_CLEAN);
-
+					if (++sanitizeIdx >= NUM_SHELVES)
+					{
+						sanitizeIdx = 0; //12apr15 wrap around
+					} 
 				}
-#endif				
 				break;
 80006bce:	e0 8f 01 53 	bral	80006e74 <main+0x9c8>
 					sealShieldState = STATE_SANITIZE_2;
@@ -11045,11 +11038,8 @@ __always_inline static void cpu_set_timeout(unsigned long delay, t_cpu_time *cpu
 80006bf2:	fe f9 05 96 	ld.w	r9,pc[1430]
 80006bf6:	30 08       	mov	r8,0
 80006bf8:	b2 88       	st.b	r9[0x0],r8
-//					display_text(IDX_CLEAR);
-					display_text(IDX_CLEAN);
-
+					} 
 				}
-#endif				
 				break;
 80006bfa:	c3 d9       	rjmp	80006e74 <main+0x9c8>
 				
@@ -11416,11 +11406,11 @@ __always_inline static void cpu_stop_timeout(t_cpu_time *cpu_time)
 				break;
 80006e66:	d7 03       	nop
 80006e68:	c0 68       	rjmp	80006e74 <main+0x9c8>
-//					display_text(IDX_CLEAR);
-					display_text(IDX_CLEAN);
-
+					if (++sanitizeIdx >= NUM_SHELVES)
+					{
+						sanitizeIdx = 0; //12apr15 wrap around
+					} 
 				}
-#endif				
 				break;
 80006e6a:	d7 03       	nop
 80006e6c:	c0 48       	rjmp	80006e74 <main+0x9c8>

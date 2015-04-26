@@ -54,23 +54,6 @@
 
 #define DEFAULT_SCREEN_UPDATE_FS_MS  100
 
-
-#if 0 //8apr15 these are for the eval kit
-#define NUMBER_OF_INPUTS_ADC_SEQ0    1
-#define INPUT1_ADC_CHANNEL           5
-#define INPUT1_ADC_INP               AVR32_ADCIFA_INP_ADCIN5
-#define INPUT1_ADC_INN               AVR32_ADCIFA_INN_GNDANA
-#define INPUT1_ADC_PIN               AVR32_ADCIN5_PIN
-#define INPUT1_ADC_FUNCTION          AVR32_ADCIN5_FUNCTION
-
-#define NUMBER_OF_INPUTS_ADC_SEQ1    1
-#define INPUT2_ADC_CHANNEL           14
-#define INPUT2_ADC_INP               AVR32_ADCIFA_INP_GNDANA
-#define INPUT2_ADC_INN               AVR32_ADCIFA_INN_ADCIN14
-#define INPUT2_ADC_PIN               AVR32_ADCIN14_PIN
-#define INPUT2_ADC_FUNCTION          AVR32_ADCIN14_FUNCTION
-#endif //8apr15
-
 /*
  * Bluesense0
  */

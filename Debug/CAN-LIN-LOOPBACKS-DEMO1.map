@@ -828,15 +828,6 @@ Discarded input sections
                 0x00000000        0x1 src/main.o
  .bss.zoom_view
                 0x00000000        0x1 src/main.o
- .bss.state     0x00000000        0x4 src/main.o
- .bss.state_fct
-                0x00000000        0x4 src/main.o
- .bss.new_state_fct
-                0x00000000        0x1 src/main.o
- .text.state_machine_global
-                0x00000000       0x1a src/main.o
- .text.state_machine_task
-                0x00000000        0xa src/main.o
  .data          0x00000000        0x0 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
  .bss           0x00000000        0x0 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
  .text          0x00000000      0x148 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/../../../../avr32/lib/ucr3fp\libc.a(lib_a-memcpy.o)
@@ -1272,11 +1263,11 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
  .rodata._int_handler_table
                 0x80007840      0x178 src/ASF/avr32/drivers/intc/intc.o
  .rodata.main   0x800079b8       0x28 src/main.o
- .rodata.C.85.15844
+ .rodata.C.85.15833
                 0x800079e0       0x10 src/main.o
- .rodata.C.86.15845
+ .rodata.C.86.15834
                 0x800079f0       0x10 src/main.o
- .rodata.ADCIFA_GPIO_MAP.15836
+ .rodata.ADCIFA_GPIO_MAP.15825
                 0x80007a00       0x38 src/main.o
 
 .rodata1
@@ -1557,7 +1548,7 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
                 0x000002ac        0x1 src/ASF/avr32/drivers/twim/twim.o
  *fill*         0x000002ad        0x3 
  .bss.cpu_hz    0x000002b0        0x4 src/pca9952.o
- .bss.sanitizeIdx.15882
+ .bss.sanitizeIdx.15871
                 0x000002b4        0x1 src/main.o
  *(COMMON)
  *fill*         0x000002b5        0x3 
@@ -1660,7 +1651,7 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
 .debug_sfnames
  *(.debug_sfnames)
 
-.debug_aranges  0x00000000      0x818
+.debug_aranges  0x00000000      0x808
  *(.debug_aranges)
  .debug_aranges
                 0x00000000       0x88 src/serial_id_ds2411.o
@@ -1689,9 +1680,9 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
  .debug_aranges
                 0x00000700       0x50 src/pca9952.o
  .debug_aranges
-                0x00000750       0xa8 src/main.o
+                0x00000750       0x98 src/main.o
  .debug_aranges
-                0x000007f8       0x20 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+                0x000007e8       0x20 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
 .debug_pubnames
                 0x00000000     0x167c
@@ -1721,7 +1712,7 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
  .debug_pubnames
                 0x0000165c       0x20 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
-.debug_info     0x00000000    0x15381
+.debug_info     0x00000000    0x15296
  *(.debug_info .gnu.linkonce.wi.*)
  .debug_info    0x00000000      0xd76 src/serial_id_ds2411.o
  .debug_info    0x00000d76     0x2b7b src/ss_print_funcs.o
@@ -1736,10 +1727,10 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
  .debug_info    0x0000e075       0xb7 src/ASF/avr32/utils/startup/startup_uc3.o
  .debug_info    0x0000e12c       0xbe src/ASF/avr32/utils/startup/trampoline_uc3.o
  .debug_info    0x0000e1ea     0x10c4 src/pca9952.o
- .debug_info    0x0000f2ae     0x5b58 src/main.o
- .debug_info    0x00014e06      0x57b c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+ .debug_info    0x0000f2ae     0x5a6d src/main.o
+ .debug_info    0x00014d1b      0x57b c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
-.debug_abbrev   0x00000000     0x1946
+.debug_abbrev   0x00000000     0x190d
  *(.debug_abbrev)
  .debug_abbrev  0x00000000      0x1fd src/serial_id_ds2411.o
  .debug_abbrev  0x000001fd      0x1d0 src/ss_print_funcs.o
@@ -1754,10 +1745,10 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
  .debug_abbrev  0x000011e3       0x12 src/ASF/avr32/utils/startup/startup_uc3.o
  .debug_abbrev  0x000011f5       0x14 src/ASF/avr32/utils/startup/trampoline_uc3.o
  .debug_abbrev  0x00001209      0x26e src/pca9952.o
- .debug_abbrev  0x00001477      0x375 src/main.o
- .debug_abbrev  0x000017ec      0x15a c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+ .debug_abbrev  0x00001477      0x33c src/main.o
+ .debug_abbrev  0x000017b3      0x15a c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
-.debug_line     0x00000000     0x7457
+.debug_line     0x00000000     0x742a
  *(.debug_line)
  .debug_line    0x00000000      0xb28 src/serial_id_ds2411.o
  .debug_line    0x00000b28      0x99b src/ss_print_funcs.o
@@ -1772,10 +1763,10 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
  .debug_line    0x000059c5       0xf2 src/ASF/avr32/utils/startup/startup_uc3.o
  .debug_line    0x00005ab7       0x67 src/ASF/avr32/utils/startup/trampoline_uc3.o
  .debug_line    0x00005b1e      0x971 src/pca9952.o
- .debug_line    0x0000648f      0xdf7 src/main.o
- .debug_line    0x00007286      0x1d1 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+ .debug_line    0x0000648f      0xdca src/main.o
+ .debug_line    0x00007259      0x1d1 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
-.debug_frame    0x00000000     0x1834
+.debug_frame    0x00000000     0x17fc
  *(.debug_frame)
  .debug_frame   0x00000000      0x1c4 src/serial_id_ds2411.o
  .debug_frame   0x000001c4      0x278 src/ss_print_funcs.o
@@ -1787,37 +1778,37 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
  .debug_frame   0x00000fec      0x198 src/ASF/avr32/drivers/twim/twim.o
  .debug_frame   0x00001184      0x358 src/ASF/avr32/drivers/usart/usart.o
  .debug_frame   0x000014dc       0xe0 src/pca9952.o
- .debug_frame   0x000015bc      0x234 src/main.o
- .debug_frame   0x000017f0       0x44 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+ .debug_frame   0x000015bc      0x1fc src/main.o
+ .debug_frame   0x000017b8       0x44 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
-.debug_str      0x00000000     0x439e
+.debug_str      0x00000000     0x429a
  *(.debug_str)
  .debug_str     0x00000000      0x270 src/serial_id_ds2411.o
                                 0x2d1 (size before relaxing)
- .debug_str     0x00000270      0x7ca src/ss_print_funcs.o
+ .debug_str     0x00000270      0x7d3 src/ss_print_funcs.o
                                 0x919 (size before relaxing)
- .debug_str     0x00000a3a      0x98f src/ASF/avr32/drivers/adcifa/adcifa.o
+ .debug_str     0x00000a43      0x98f src/ASF/avr32/drivers/adcifa/adcifa.o
                                 0xb33 (size before relaxing)
- .debug_str     0x000013c9      0x58c src/ASF/avr32/drivers/gpio/gpio.o
+ .debug_str     0x000013d2      0x58c src/ASF/avr32/drivers/gpio/gpio.o
                                 0x701 (size before relaxing)
- .debug_str     0x00001955      0x656 src/ASF/avr32/drivers/intc/intc.o
+ .debug_str     0x0000195e      0x656 src/ASF/avr32/drivers/intc/intc.o
                                 0x781 (size before relaxing)
- .debug_str     0x00001fab      0x621 src/ASF/avr32/drivers/pm/pm_uc3c.o
+ .debug_str     0x00001fb4      0x621 src/ASF/avr32/drivers/pm/pm_uc3c.o
                                 0x7c0 (size before relaxing)
- .debug_str     0x000025cc      0xa53 src/ASF/avr32/drivers/scif/scif_uc3c.o
+ .debug_str     0x000025d5      0xa53 src/ASF/avr32/drivers/scif/scif_uc3c.o
                                 0xc73 (size before relaxing)
- .debug_str     0x0000301f      0x563 src/ASF/avr32/drivers/twim/twim.o
+ .debug_str     0x00003028      0x563 src/ASF/avr32/drivers/twim/twim.o
                                 0x742 (size before relaxing)
- .debug_str     0x00003582      0x399 src/ASF/avr32/drivers/usart/usart.o
+ .debug_str     0x0000358b      0x399 src/ASF/avr32/drivers/usart/usart.o
                                 0xb0d (size before relaxing)
- .debug_str     0x0000391b      0x100 src/pca9952.o
+ .debug_str     0x00003924      0x100 src/pca9952.o
                                 0x6c3 (size before relaxing)
- .debug_str     0x00003a1b      0x83d src/main.o
-                               0x1b33 (size before relaxing)
- .debug_str     0x00004258      0x146 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+ .debug_str     0x00003a24      0x730 src/main.o
+                               0x1a16 (size before relaxing)
+ .debug_str     0x00004154      0x146 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
                                 0x1fb (size before relaxing)
 
-.debug_loc      0x00000000     0x2a78
+.debug_loc      0x00000000     0x2a22
  *(.debug_loc)
  .debug_loc     0x00000000      0x25a src/serial_id_ds2411.o
  .debug_loc     0x0000025a      0x3b2 src/ss_print_funcs.o
@@ -1829,8 +1820,8 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
  .debug_loc     0x00001784      0x25a src/ASF/avr32/drivers/twim/twim.o
  .debug_loc     0x000019de      0x50a src/ASF/avr32/drivers/usart/usart.o
  .debug_loc     0x00001ee8      0x12d src/pca9952.o
- .debug_loc     0x00002015      0x306 src/main.o
- .debug_loc     0x0000231b      0x75d c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+ .debug_loc     0x00002015      0x2b0 src/main.o
+ .debug_loc     0x000022c5      0x75d c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
 .debug_macinfo  0x00000000   0xdad4f2
  *(.debug_macinfo)
@@ -1897,7 +1888,7 @@ LOAD c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr3
  *(.note.GNU-stack)
 OUTPUT(CAN-LIN-LOOPBACKS-DEMO1.elf elf32-avr32)
 
-.debug_ranges   0x00000000      0x7d0
+.debug_ranges   0x00000000      0x7c0
  .debug_ranges  0x00000000       0x80 src/serial_id_ds2411.o
  .debug_ranges  0x00000080       0xc0 src/ss_print_funcs.o
  .debug_ranges  0x00000140       0x80 src/ASF/avr32/drivers/adcifa/adcifa.o
@@ -1909,5 +1900,5 @@ OUTPUT(CAN-LIN-LOOPBACKS-DEMO1.elf elf32-avr32)
  .debug_ranges  0x00000550      0x100 src/ASF/avr32/drivers/usart/usart.o
  .debug_ranges  0x00000650       0x20 src/ASF/avr32/utils/startup/startup_uc3.o
  .debug_ranges  0x00000670       0x48 src/pca9952.o
- .debug_ranges  0x000006b8       0xa0 src/main.o
- .debug_ranges  0x00000758       0x78 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+ .debug_ranges  0x000006b8       0x90 src/main.o
+ .debug_ranges  0x00000748       0x78 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
