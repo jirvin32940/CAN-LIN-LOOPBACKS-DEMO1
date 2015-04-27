@@ -12,16 +12,14 @@ topEflag0           0x1               src/main.o
 D                   0x4               src/serial_id_ds2411.o
 zoom_view_id        0x4               src/main.o
 timerClean          0xc               src/main.o
+bluesense_buf       0x8               src/main.o
 botEflag1           0x1               src/main.o
 shelfTimerInitSeconds
                     0x10              src/main.o
 adc_values_seq0     0x2               src/main.o
 sealShieldState     0x1               src/main.o
 A                   0x4               src/serial_id_ds2411.o
-bluesense0_buf      0x200             src/main.o
-bluesense2_buf      0x200             src/main.o
 ledBoardPresent     0x14              src/main.o
-bluesense3_buf      0x200             src/main.o
 timerShelf3         0xc               src/main.o
 adc_current_conversion
                     0x2               src/main.o
@@ -42,11 +40,9 @@ numActiveShelves    0x1               src/main.o
 E                   0x4               src/serial_id_ds2411.o
 I                   0x4               src/serial_id_ds2411.o
 timerShelf2         0xc               src/main.o
-adc_values_seq1     0x2               src/main.o
 devicesPresentOnShelf
                     0x4               src/main.o
 shelfActive         0x4               src/main.o
-bluesense1_buf      0x200             src/main.o
 ledBrdSerialID      0x28              src/main.o
 anyShelvesStillSanitizing
                     0x1               src/main.o
@@ -993,7 +989,7 @@ END GROUP
 .plt
  *(.plt)
 
-.text           0x80002010     0x541c
+.text           0x80002010     0x51b4
  *(.text .stub .text.* .gnu.linkonce.t.*)
  .text.io_pin   0x80002010       0x4c src/serial_id_ds2411.o
                 0x80002010                io_pin
@@ -1196,73 +1192,73 @@ END GROUP
                 0x80005c54       0x4c src/main.o
                 0x80005c54                check_led_brd_side_lifetimes
  .text.adc_process_task
-                0x80005ca0      0x288 src/main.o
+                0x80005ca0       0x98 src/main.o
                 0x80005ca0                adc_process_task
  .text.check_shelf_for_devices
-                0x80005f28      0x21c src/main.o
-                0x80005f28                check_shelf_for_devices
+                0x80005d38      0x1a4 src/main.o
+                0x80005d38                check_shelf_for_devices
  .text.check_shelves_for_devices
-                0x80006144       0x4c src/main.o
-                0x80006144                check_shelves_for_devices
+                0x80005edc       0x4c src/main.o
+                0x80005edc                check_shelves_for_devices
  .text.set_shelves_active_inactive
-                0x80006190      0x164 src/main.o
-                0x80006190                set_shelves_active_inactive
+                0x80005f28      0x164 src/main.o
+                0x80005f28                set_shelves_active_inactive
  .text.num_active_shelves
-                0x800062f4       0x14 src/main.o
-                0x800062f4                num_active_shelves
+                0x8000608c       0x14 src/main.o
+                0x8000608c                num_active_shelves
  .text.init_sys_clocks
-                0x80006308       0x50 src/main.o
-                0x80006308                init_sys_clocks
+                0x800060a0       0x50 src/main.o
+                0x800060a0                init_sys_clocks
  .text.adc_process_init
-                0x80006358       0x4c src/main.o
-                0x80006358                adc_process_init
+                0x800060f0       0x4c src/main.o
+                0x800060f0                adc_process_init
  .text.twi_init
-                0x800063a4       0x80 src/main.o
+                0x8000613c       0x80 src/main.o
  .text.calc_sanitize_time
-                0x80006424       0x70 src/main.o
-                0x80006424                calc_sanitize_time
+                0x800061bc       0x70 src/main.o
+                0x800061bc                calc_sanitize_time
  .text.door_latch_open_kill_all_shelves
-                0x80006494       0x30 src/main.o
-                0x80006494                door_latch_open_kill_all_shelves
- .text.main     0x800064c4      0xd04 src/main.o
-                0x800064c4                main
- .text          0x800071c8      0x264 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
-                0x800071c8                __avr32_udiv64
-                0x800071c8                __udivdi3
+                0x8000622c       0x30 src/main.o
+                0x8000622c                door_latch_open_kill_all_shelves
+ .text.main     0x8000625c      0xd04 src/main.o
+                0x8000625c                main
+ .text          0x80006f60      0x264 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+                0x80006f60                __avr32_udiv64
+                0x80006f60                __udivdi3
  *(.text.*personality*)
  *(.gnu.warning)
 
-.exception      0x80007600      0x200
- .exception     0x80007600      0x200 src/ASF/avr32/drivers/intc/exception.o
-                0x80007600                _evba
-                0x80007704                _int0
-                0x80007712                _int1
-                0x80007720                _int2
-                0x8000772e                _int3
+.exception      0x80007200      0x200
+ .exception     0x80007200      0x200 src/ASF/avr32/drivers/intc/exception.o
+                0x80007200                _evba
+                0x80007304                _int0
+                0x80007312                _int1
+                0x80007320                _int2
+                0x8000732e                _int3
 
 .fini
  *(.fini)
-                0x80007800                PROVIDE (__etext, .)
-                0x80007800                PROVIDE (_etext, .)
-                0x80007800                PROVIDE (etext, .)
+                0x80007400                PROVIDE (__etext, .)
+                0x80007400                PROVIDE (_etext, .)
+                0x80007400                PROVIDE (etext, .)
 
-.rodata         0x80007800      0x238
+.rodata         0x80007400      0x230
  *(.rodata .rodata.* .gnu.linkonce.r.*)
  .rodata.DISPLAY_USART_GPIO_MAP.14651
-                0x80007800       0x10 src/ss_print_funcs.o
+                0x80007400       0x10 src/ss_print_funcs.o
  .rodata.SSDBG_USART_GPIO_MAP.14645
-                0x80007810       0x10 src/ss_print_funcs.o
+                0x80007410       0x10 src/ss_print_funcs.o
  .rodata.gpio_enable_module_pin
-                0x80007820       0x20 src/ASF/avr32/drivers/gpio/gpio.o
+                0x80007420       0x20 src/ASF/avr32/drivers/gpio/gpio.o
  .rodata._int_handler_table
-                0x80007840      0x178 src/ASF/avr32/drivers/intc/intc.o
- .rodata.main   0x800079b8       0x28 src/main.o
- .rodata.C.85.15855
-                0x800079e0       0x10 src/main.o
- .rodata.C.86.15856
-                0x800079f0       0x10 src/main.o
- .rodata.ADCIFA_GPIO_MAP.15845
-                0x80007a00       0x38 src/main.o
+                0x80007440      0x178 src/ASF/avr32/drivers/intc/intc.o
+ .rodata.main   0x800075b8       0x28 src/main.o
+ .rodata.C.69.15769
+                0x800075e0       0x10 src/main.o
+ .rodata.C.70.15770
+                0x800075f0       0x10 src/main.o
+ .rodata.ADCIFA_GPIO_MAP.15759
+                0x80007600       0x30 src/main.o
 
 .rodata1
  *(.rodata1)
@@ -1277,9 +1273,9 @@ END GROUP
  *(.gcc_except_table)
  *(.gcc_except_table.*)
 
-.lalign         0x80007a38        0x0
-                0x80007a38                . = ALIGN (0x8)
-                0x80007a38                PROVIDE (_data_lma, .)
+.lalign         0x80007630        0x0
+                0x80007630                . = ALIGN (0x8)
+                0x80007630                PROVIDE (_data_lma, .)
                 0x00000004                . = ORIGIN (INTRAM)
 
 .dalign         0x00000004        0x4
@@ -1345,10 +1341,10 @@ END GROUP
 .ramtext
  *(.ramtext .ramtext.*)
 
-.ddalign        0x00000008        0x0 load address 0x80007a38
+.ddalign        0x00000008        0x0 load address 0x80007630
                 0x00000008                . = ALIGN (0x8)
 
-.data           0x00000008       0xb5 load address 0x80007a38
+.data           0x00000008       0xb5 load address 0x80007630
  *(.data .data.* .gnu.linkonce.d.*)
  .data.CMD_READY
                 0x00000008        0x8 src/main.o
@@ -1389,18 +1385,9 @@ END GROUP
  .data.adcifa_sequence_opt
                 0x00000094        0x7 src/main.o
                 0x00000094                adcifa_sequence_opt
- .data.adcifa_sequence_conversion_opt_seq0_shelf1
-                0x0000009b        0x3 src/main.o
-                0x0000009b                adcifa_sequence_conversion_opt_seq0_shelf1
- .data.adcifa_sequence_conversion_opt_seq1_shelf2
-                0x0000009e        0x3 src/main.o
-                0x0000009e                adcifa_sequence_conversion_opt_seq1_shelf2
- .data.adcifa_sequence_conversion_opt_seq0_shelf3
-                0x000000a1        0x3 src/main.o
-                0x000000a1                adcifa_sequence_conversion_opt_seq0_shelf3
- .data.adcifa_sequence_conversion_opt_seq1_shelf4
-                0x000000a4        0x3 src/main.o
-                0x000000a4                adcifa_sequence_conversion_opt_seq1_shelf4
+ .data.adcifa_sequence_conversion_opt_seq0_shelf
+                0x0000009b        0xc src/main.o
+                0x0000009b                adcifa_sequence_conversion_opt_seq0_shelf
  *fill*         0x000000a7        0x1 
  .data.adcifa   0x000000a8        0x4 src/main.o
                 0x000000a8                adcifa
@@ -1415,14 +1402,14 @@ END GROUP
 .data1
  *(.data1)
 
-.balign         0x000000bd        0x3 load address 0x80007aed
+.balign         0x000000bd        0x3 load address 0x800076e5
                 0x000000c0                . = ALIGN (0x8)
  *fill*         0x000000bd        0x3 
                 0x000000c0                PROVIDE (_edata, .)
                 0x000000c0                PROVIDE (edata, .)
                 0x000000c0                __bss_start = .
 
-.bss            0x000000c0      0xb18
+.bss            0x000000c0      0x318
  *(.dynbss)
  *(.bss .bss.* .gnu.linkonce.b.*)
  .bss.adcifa_seq1_configured
@@ -1542,7 +1529,7 @@ END GROUP
                 0x000002ac        0x1 src/ASF/avr32/drivers/twim/twim.o
  *fill*         0x000002ad        0x3 
  .bss.cpu_hz    0x000002b0        0x4 src/pca9952.o
- .bss.sanitizeIdx.15897
+ .bss.sanitizeIdx.15811
                 0x000002b4        0x1 src/main.o
  *(COMMON)
  *fill*         0x000002b5        0x3 
@@ -1557,46 +1544,42 @@ END GROUP
                 0x000002d4                E
                 0x000002d8                I
                 0x000002dc                F
- COMMON         0x000002e0      0x8f1 src/main.o
+ COMMON         0x000002e0       0xf5 src/main.o
                 0x000002e0                topEflag0
                 0x000002e4                zoom_view_id
                 0x000002e8                timerClean
-                0x000002f4                botEflag1
-                0x000002f8                shelfTimerInitSeconds
-                0x00000308                adc_values_seq0
-                0x0000030a                sealShieldState
-                0x0000030c                bluesense0_buf
-                0x0000050c                bluesense2_buf
-                0x0000070c                ledBoardPresent
-                0x00000720                bluesense3_buf
-                0x00000920                timerShelf3
-                0x0000092c                adc_current_conversion
-                0x0000092e                topEflag1
-                0x0000092f                botEflag0
-                0x00000930                shelfTimer
-                0x00000960                timerDebugLed
-                0x0000096c                timerShelf1
-                0x00000978                timerShelf0
-                0x00000984                brdSideWithinLifetimeLimit
-                0x0000098c                numActiveShelves
-                0x00000990                timerShelf2
-                0x0000099c                adc_values_seq1
-                0x000009a0                devicesPresentOnShelf
-                0x000009a4                shelfActive
-                0x000009a8                bluesense1_buf
-                0x00000ba8                ledBrdSerialID
-                0x00000bd0                anyShelvesStillSanitizing
-                0x00000bd8                . = ALIGN (0x8)
- *fill*         0x00000bd1        0x7 
-                0x00000bd8                . = ALIGN (0x8)
-                0x00000bd8                _end = .
-                0x00000bd8                PROVIDE (end, .)
-                0x00000bd8                __heap_start__ = ALIGN (0x8)
+                0x000002f4                bluesense_buf
+                0x000002fc                botEflag1
+                0x00000300                shelfTimerInitSeconds
+                0x00000310                adc_values_seq0
+                0x00000312                sealShieldState
+                0x00000314                ledBoardPresent
+                0x00000328                timerShelf3
+                0x00000334                adc_current_conversion
+                0x00000336                topEflag1
+                0x00000337                botEflag0
+                0x00000338                shelfTimer
+                0x00000368                timerDebugLed
+                0x00000374                timerShelf1
+                0x00000380                timerShelf0
+                0x0000038c                brdSideWithinLifetimeLimit
+                0x00000394                numActiveShelves
+                0x00000398                timerShelf2
+                0x000003a4                devicesPresentOnShelf
+                0x000003a8                shelfActive
+                0x000003ac                ledBrdSerialID
+                0x000003d4                anyShelvesStillSanitizing
+                0x000003d8                . = ALIGN (0x8)
+ *fill*         0x000003d5        0x3 
+                0x000003d8                . = ALIGN (0x8)
+                0x000003d8                _end = .
+                0x000003d8                PROVIDE (end, .)
+                0x000003d8                __heap_start__ = ALIGN (0x8)
 
-.heap           0x00000bd8     0xe428
+.heap           0x000003d8     0xec28
  *(.heap)
-                0x0000e428                . = (__heap_size__ == __max_heap_size__)?(((ORIGIN (INTRAM) + 0xfffc) - __stack_size__) - ABSOLUTE (.)):__heap_size__
- *fill*         0x00000bd8     0xe428 
+                0x0000ec28                . = (__heap_size__ == __max_heap_size__)?(((ORIGIN (INTRAM) + 0xfffc) - __stack_size__) - ABSOLUTE (.)):__heap_size__
+ *fill*         0x000003d8     0xec28 
                 0x0000f000                __heap_end__ = .
 
 .stab
@@ -1679,7 +1662,7 @@ END GROUP
                 0x000007e8       0x20 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
 .debug_pubnames
-                0x00000000     0x167c
+                0x00000000     0x15a0
  *(.debug_pubnames)
  .debug_pubnames
                 0x00000000      0x128 src/serial_id_ds2411.o
@@ -1702,11 +1685,11 @@ END GROUP
  .debug_pubnames
                 0x0000105b       0x70 src/pca9952.o
  .debug_pubnames
-                0x000010cb      0x591 src/main.o
+                0x000010cb      0x4b5 src/main.o
  .debug_pubnames
-                0x0000165c       0x20 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+                0x00001580       0x20 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
-.debug_info     0x00000000    0x15260
+.debug_info     0x00000000    0x1519a
  *(.debug_info .gnu.linkonce.wi.*)
  .debug_info    0x00000000      0xd7a src/serial_id_ds2411.o
  .debug_info    0x00000d7a     0x2b7c src/ss_print_funcs.o
@@ -1721,8 +1704,8 @@ END GROUP
  .debug_info    0x0000e07a       0xb7 src/ASF/avr32/utils/startup/startup_uc3.o
  .debug_info    0x0000e131       0xbe src/ASF/avr32/utils/startup/trampoline_uc3.o
  .debug_info    0x0000e1ef     0x10c4 src/pca9952.o
- .debug_info    0x0000f2b3     0x5a32 src/main.o
- .debug_info    0x00014ce5      0x57b c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+ .debug_info    0x0000f2b3     0x596c src/main.o
+ .debug_info    0x00014c1f      0x57b c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
 .debug_abbrev   0x00000000     0x190d
  *(.debug_abbrev)
@@ -1742,7 +1725,7 @@ END GROUP
  .debug_abbrev  0x00001477      0x33c src/main.o
  .debug_abbrev  0x000017b3      0x15a c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
-.debug_line     0x00000000     0x742c
+.debug_line     0x00000000     0x73e9
  *(.debug_line)
  .debug_line    0x00000000      0xb2a src/serial_id_ds2411.o
  .debug_line    0x00000b2a      0x99b src/ss_print_funcs.o
@@ -1757,8 +1740,8 @@ END GROUP
  .debug_line    0x000059c7       0xf2 src/ASF/avr32/utils/startup/startup_uc3.o
  .debug_line    0x00005ab9       0x67 src/ASF/avr32/utils/startup/trampoline_uc3.o
  .debug_line    0x00005b20      0x971 src/pca9952.o
- .debug_line    0x00006491      0xdca src/main.o
- .debug_line    0x0000725b      0x1d1 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+ .debug_line    0x00006491      0xd87 src/main.o
+ .debug_line    0x00007218      0x1d1 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
 .debug_frame    0x00000000     0x17fc
  *(.debug_frame)
@@ -1775,7 +1758,7 @@ END GROUP
  .debug_frame   0x000015bc      0x1fc src/main.o
  .debug_frame   0x000017b8       0x44 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
 
-.debug_str      0x00000000     0x429a
+.debug_str      0x00000000     0x41da
  *(.debug_str)
  .debug_str     0x00000000      0x270 src/serial_id_ds2411.o
                                 0x2d1 (size before relaxing)
@@ -1797,9 +1780,9 @@ END GROUP
                                 0xb0d (size before relaxing)
  .debug_str     0x00003924      0x100 src/pca9952.o
                                 0x6c3 (size before relaxing)
- .debug_str     0x00003a24      0x730 src/main.o
-                               0x1a02 (size before relaxing)
- .debug_str     0x00004154      0x146 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
+ .debug_str     0x00003a24      0x670 src/main.o
+                               0x193b (size before relaxing)
+ .debug_str     0x00004094      0x146 c:/program files (x86)/atmel/atmel toolchain/avr32 gcc/native/3.4.1067/avr32-gnu-toolchain/bin/../lib/gcc/avr32/4.4.7/ucr3fp\libgcc.a(_udivdi3.o)
                                 0x1fb (size before relaxing)
 
 .debug_loc      0x00000000     0x2a22
@@ -1862,12 +1845,12 @@ END GROUP
                 0x00010000                _estack = .
                 0xa0000000                . = ORIGIN (HRAM0)
 
-.data_hram0     0xa0000000        0x0 load address 0x80007af0
+.data_hram0     0xa0000000        0x0 load address 0x800076e8
                 0xa0000000                PROVIDE (_data_hram0, .)
  *(.data_hram0)
                 0xa0000000                . = ALIGN (0x8)
                 0xa0000000                PROVIDE (_edata_hram0, .)
-                0x80007af0                PROVIDE (_data_hram0_lma, ABSOLUTE (LOADADDR (.data_hram0)))
+                0x800076e8                PROVIDE (_data_hram0_lma, ABSOLUTE (LOADADDR (.data_hram0)))
                 0xa0000000                . = ALIGN (0x8)
 
 .bss_hram0      0xa0000000        0x0

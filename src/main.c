@@ -1,9 +1,12 @@
 /**
  * \file
  *
- * \brief AVR UC3C CAN-LIN Loopback Demo
+ * \brief Seal Shield Electroclave device sanitizer
+ * based on Atmel's AVR UC3C CAN-LIN Loopback Demo
  *
  * Copyright (c) 2011-2014 Atmel Corporation. All rights reserved.
+ *
+ * Copyright (c) 2015 Seal Shield. All rights reserved.
  *
  * \asf_license_start
  *
@@ -41,25 +44,6 @@
  *
  */
 /*! \mainpage
- * \section intro Introduction
- * This is the documentation for CAN and LIN loopback demo application running
- * on the UC3C_EK development kit.
- * - Step 1: The potentiometer value is read and displayed on the LCD screen.
- * - Step 2: The value of the potentiometer is sent through CAN network.
- * - Step 3: The content of the received message on CAN network is displayed on
- *   the LCD screen and corresponds to the screen observed in step 1.
- * - Step 4: The same message is also transmitted on LIN bus
- * - Step 5: The content of the message received on LIN network is displayed on
- *   the LCD screen and should correspond to the screen observed on step 1,3.
- * \section files Main Files
- * - main.c: Main File;
- * - can_task.c: CAN Task Management;
- * - lin_task.c: LIN Task Management;
- * - controller.c: Qtouch Controller Management;
- * - gui.c: GUI Display Management;
- * - <A href="http://www.atmel.com/dyn/resources/prod_documents/doc32137.pdf"
- *   style="text-decoration:none"><b>doc32137.pdf</b></A>: AVR32907 UC3C-EK
- *   Getting Started file - how to setup and run this application;
  *
  * \section compilinfo Compilation Information
  * This software is written for GNU GCC for AVR32 and for IAR Embedded Workbench
@@ -67,18 +51,6 @@
  *
  * \section deviceinfo Device Information
  * All AVR32 AT32UC3C devices can be used.
- *
- * \section configinfo Configuration Information
- * This example has been tested with the following configuration:
- * - UC3C_EK evaluation kit;
- * - CPU clock: 16 MHz;
- * - USART2 (on UC3C_EK) abstracted with a USB CDC connection to a PC;
- * - PC terminal settings:
- *   - 57600 bps,
- *   - 8 data bits,
- *   - no parity bit,
- *   - 1 stop bit,
- *   - no flow control.
  *
  * \section contactinfo Contact Information
  * For further information, visit
@@ -89,35 +61,28 @@
  */
 
 #include "compiler.h"
-// 6apr15 #include "board.h"
 #include "power_clocks_lib.h"
-//6 apr15 #include "dsp.h"
-//6 apr15 #include "gui.h"
-//6 apr15 #include "controller.h"
 #include "gpio.h"
 #include "ss_print_funcs.h" //8apr15 changed from print_funcs.h
 #include "flashc.h"
 #include "adcifa.h"
 #include "twim.h"
-// 6apr15 #include "conf_at42qt1060.h"
 #include "conf_pca9952.h" //6apr15
 #include "pca9952.h" //7apr15
-//6 apr15 #include "lin_task.h"
-//6 apr15 #include "can_task.h"
-//8apr15 #include "conf_demo.h"
 #include "conf_sealshield.h"	//8apr15
 #include "cycle_counter.h"		//8apr15	
 #include "usart.h"				//9apr15
 #include "serial_id_ds2411.h"	//9apr15
 
-//6apr15 A_ALIGNED dsp16_t signal1_buf[BUFFER_LENGTH];
-//6apr15 A_ALIGNED dsp16_t signal4_buf[BUFFER_LENGTH];
+/*
+ * ADC reading storage: for device detection
+ */
+int16_t bluesense_buf[4];
 
-int16_t bluesense0_buf[BUFFER_LENGTH]; //6apr15 remember we changed dsp16_t to int16_t without all the aligned stuff in case this does something squirrely
-int16_t bluesense1_buf[BUFFER_LENGTH]; //6apr15
-int16_t bluesense2_buf[BUFFER_LENGTH]; //6apr15
-int16_t bluesense3_buf[BUFFER_LENGTH]; //6apr15
 
+/*
+ * Commands for LED display: we can only display the strings provided for by the display
+ */
 
 unsigned char CMD_READY[7] =	{0x55, 0xAA, 0x91, 0x00, 0x00, 0x00, 0x00};
 unsigned char CMD_CLEAN[7] =	{0x55, 0xAA, 0x92, 0x00, 0x00, 0x00, 0x00};
@@ -325,7 +290,8 @@ void check_led_brd_side_lifetimes(void)
 // ADC Configuration
 adcifa_opt_t adc_config_t = {
 	.frequency                = 1000000,        // ADC frequency (Hz)
-	.reference_source         = ADCIFA_ADCREF0, // Reference Source
+//26apr15	.reference_source         = ADCIFA_ADCREF0, // Reference Source
+	.reference_source		  = ADCIFA_ADCREF,  // Reference Source 26apr15
 	.sample_and_hold_disable  = false,    		// Disable Sample and Hold Time
 	.single_sequencer_mode    = false,   		// Single Sequencer Mode
 	.free_running_mode_enable = false,    		// Free Running Mode
@@ -338,47 +304,35 @@ adcifa_sequencer_opt_t adcifa_sequence_opt = {
 	NUMBER_OF_INPUTS_ADC_SEQ0,
 	ADCIFA_SRES_12B,
 	ADCIFA_TRGSEL_SOFT,
-	ADCIFA_SOCB_ALLSEQ,
+//26apr15	ADCIFA_SOCB_ALLSEQ,
+	ADCIFA_SOCB_SINGLECONV, //26apr15
 	ADCIFA_SH_MODE_OVERSAMP,
 	ADCIFA_HWLA_NOADJ,
 	ADCIFA_SA_NO_EOS_SOFTACK
 };
 
-int16_t adc_values_seq0[NUMBER_OF_INPUTS_ADC_SEQ0];
+int16_t adc_values_seq0;
 adcifa_sequencer_conversion_opt_t
-adcifa_sequence_conversion_opt_seq0_shelf1[NUMBER_OF_INPUTS_ADC_SEQ0] = {
+adcifa_sequence_conversion_opt_seq0_shelf[4] = {
 	{
 		INPUT1_ADC_INP,
 		INPUT1_ADC_INN,
 		ADCIFA_SHG_8
-	}
-};
-
-int16_t adc_values_seq1[NUMBER_OF_INPUTS_ADC_SEQ1];
-adcifa_sequencer_conversion_opt_t
-adcifa_sequence_conversion_opt_seq1_shelf2[NUMBER_OF_INPUTS_ADC_SEQ1] = {
+	},
 	{
 		INPUT2_ADC_INP,
 		INPUT2_ADC_INN,
 		ADCIFA_SHG_8
-	}
-};
-
-adcifa_sequencer_conversion_opt_t
-adcifa_sequence_conversion_opt_seq0_shelf3[NUMBER_OF_INPUTS_ADC_SEQ0] = {
+	},
 	{
 		INPUT3_ADC_INP,
 		INPUT3_ADC_INN,
 		ADCIFA_SHG_8
-	}
-};
-
-adcifa_sequencer_conversion_opt_t
-adcifa_sequence_conversion_opt_seq1_shelf4[NUMBER_OF_INPUTS_ADC_SEQ1] = {
+	},
 	{
 		INPUT4_ADC_INP,
 		INPUT4_ADC_INN,
-		ADCIFA_SHG_8 //TODO: what is this supposed to be?? This is gain conversion, figure out what it needs to be set to and set all bluesense channels the same way
+		ADCIFA_SHG_8
 	}
 };
 
@@ -387,103 +341,24 @@ volatile avr32_adcifa_t *adcifa = &AVR32_ADCIFA; // ADCIFA IP registers address
 int16_t adc_process_task(unsigned char shelfIdx);
 int16_t adc_process_task(unsigned char shelfIdx)
 {
-	int32_t i;
+	// Configure ADCIFA sequencer 0 for this particular shelf
+	adcifa_configure_sequencer(adcifa, 0, &adcifa_sequence_opt,
+		&adcifa_sequence_conversion_opt_seq0_shelf[shelfIdx]);
 
-	volatile int16_t retVal;
+	// Start ADCIFA sequencer 0
+	adcifa_start_sequencer(adcifa, 0);
 
-	switch (shelfIdx)
+	// Get Values from sequencer 0
+	while(1)
 	{
-		case 0:
-			// Configure ADCIFA sequencer 0 shelf 1
-			adcifa_configure_sequencer(adcifa, 0,
-			&adcifa_sequence_opt,
-			adcifa_sequence_conversion_opt_seq0_shelf1);
-
-			// Start ADCIFA sequencer 0
-			adcifa_start_sequencer(adcifa, 0);
-
-			// Get Values from sequencer 0
-			if (adcifa_get_values_from_sequencer(adcifa,
-			0,
-			&adcifa_sequence_opt,
-			adc_values_seq0) == ADCIFA_STATUS_COMPLETED) {
-				for (i=BUFFER_LENGTH-1;i>=1;i--) {
-					bluesense0_buf[i] = bluesense0_buf[i-1];
-				}
-				bluesense0_buf[0] = adc_values_seq0[0];
-				retVal = bluesense0_buf[0];
-			}
-			break;
+		//TODO: need a timeout here and error handling in case the ADC gets stuck for some reason
 		
-		case 1:
-			// Configure ADCIFA sequencer 1 shelf 2
-			adcifa_configure_sequencer(adcifa, 1,
-			&adcifa_sequence_opt,
-			adcifa_sequence_conversion_opt_seq1_shelf2);
-
-			// Start ADCIFA sequencer 1
-			adcifa_start_sequencer(adcifa, 1);
-
-			// Get Values from sequencer 1
-			if (adcifa_get_values_from_sequencer(adcifa,
-			1,
-			&adcifa_sequence_opt,
-			adc_values_seq1) == ADCIFA_STATUS_COMPLETED) {
-				for (i=BUFFER_LENGTH-1;i>=1;i--) {
-					bluesense1_buf[i] = bluesense1_buf[i-1];
-				}
-				bluesense1_buf[0] = adc_values_seq1[0];
-			}
-			retVal = bluesense1_buf[0];
-			break;
-		
-		case 2:
-			// Configure ADCIFA sequencer 0 shelf 3
-			adcifa_configure_sequencer(adcifa, 0,
-			&adcifa_sequence_opt,
-			adcifa_sequence_conversion_opt_seq0_shelf3);
-
-			// Start ADCIFA sequencer 0
-			adcifa_start_sequencer(adcifa, 0);
-
-			// Get Values from sequencer 2
-			if (adcifa_get_values_from_sequencer(adcifa,
-			0,
-			&adcifa_sequence_opt,
-			adc_values_seq0) == ADCIFA_STATUS_COMPLETED) {
-				for (i=BUFFER_LENGTH-1;i>=1;i--) {
-					bluesense2_buf[i] = bluesense2_buf[i-1];
-				}
-				bluesense2_buf[0] = adc_values_seq0[0];
-			}
-			retVal = bluesense2_buf[0];
-			break;
-		
-		case 3:
-			// Configure ADCIFA sequencer 1 shelf 4
-			adcifa_configure_sequencer(adcifa, 1,
-			&adcifa_sequence_opt,
-			adcifa_sequence_conversion_opt_seq1_shelf4);
-
-			// Start ADCIFA sequencer 1
-			adcifa_start_sequencer(adcifa, 1);
-
-			// Get Values from sequencer 1
-			if (adcifa_get_values_from_sequencer(adcifa,
-			1,
-			&adcifa_sequence_opt,
-			adc_values_seq1) == ADCIFA_STATUS_COMPLETED) {
-				for (i=BUFFER_LENGTH-1;i>=1;i--) {
-					bluesense3_buf[i] = bluesense3_buf[i-1];
-				}
-				bluesense3_buf[0] = adc_values_seq1[0];
-			}
-			retVal = bluesense3_buf[0];
-			break;
+		if (adcifa_get_values_from_sequencer(adcifa, 0, &adcifa_sequence_opt, &adc_values_seq0) == ADCIFA_STATUS_COMPLETED) 
+		{
+			bluesense_buf[shelfIdx] = adc_values_seq0;
+			return bluesense_buf[shelfIdx];
+		}
 	}
-	
-	return retVal;
-
 }
 
 
@@ -498,7 +373,6 @@ unsigned char check_shelf_for_devices(unsigned char shelfPosition);
 unsigned char check_shelf_for_devices(unsigned char shelfPosition)
 {
 	U16 bluesense;
-	unsigned char retVal;
 	
 	led_shelf(shelfPosition, LED_ON); //TODO: do we finish this task fast enough to not check the door latch in here? Can't have LEDs on if the door opens
 	
@@ -510,34 +384,15 @@ unsigned char check_shelf_for_devices(unsigned char shelfPosition)
 
 	led_shelf(shelfPosition, LED_OFF);
 	
-	retVal = NO_DEVICES_PRESENT;
 
-	switch(shelfPosition)
+	if (bluesense > 0x800)
 	{
-		case 0:
-			if (bluesense > 0x800) {
-				retVal = DEVICES_PRESENT;
-			}
-			break;
-		case 1:
-			if (bluesense > 0x800) {
-				retVal = DEVICES_PRESENT;
-			}
-			break;
-		case 2:
-			if (bluesense > 0x800) {
-				retVal = DEVICES_PRESENT;
-			}
-			break;
-		case 3:
-			if (bluesense > 0x800) {
-				retVal = DEVICES_PRESENT;
-			}
-			break;
+		return DEVICES_PRESENT;
 	}
-	
-
-	return retVal;
+	else
+	{
+		return NO_DEVICES_PRESENT;
+	}
 }
 
 void check_shelves_for_devices(void);
@@ -717,24 +572,6 @@ volatile bool output_fft_view = false;
 volatile bool zoom_view = false;
 volatile int32_t zoom_view_id;
 
-enum state_master {
-	STATE_IDLE,
-	STATE_SOURCE1,
-	STATE_OUTPUT1,
-	STATE_OUTPUT2,
-	STATE_OUTPUT3
-};
-
-enum state_function {
-	STATE_FCT_IDLE,
-	STATE_FCT_FUNCTION1,
-	STATE_FCT_FUNCTION2,
-	STATE_FCT_FUNCTION3,
-	STATE_FCT_FUNCTION4,
-	STATE_FCT_ZOOM
-};
-
-
 /*! \brief ADC Process Init
  *
  *
@@ -744,13 +581,13 @@ void adc_process_init(void)
 {
 	// GPIO pin/adc-function map.
 	static const gpio_map_t ADCIFA_GPIO_MAP = {
-		{AVR32_ADCREF0_PIN,AVR32_ADCREF0_FUNCTION},
+//26apr15 using internal ref now		{AVR32_ADCREF0_PIN,AVR32_ADCREF0_FUNCTION},
 		{AVR32_ADCREFP_PIN,AVR32_ADCREFP_FUNCTION},
 		{AVR32_ADCREFN_PIN,AVR32_ADCREFN_FUNCTION},
 		{INPUT1_ADC_PIN, INPUT1_ADC_FUNCTION},
 		{INPUT2_ADC_PIN, INPUT2_ADC_FUNCTION},
-		{INPUT3_ADC_PIN, INPUT3_ADC_FUNCTION},	//8apr15 TODO is this right??
-		{INPUT4_ADC_PIN, INPUT4_ADC_FUNCTION}	//8apr15 TODO is this right??
+		{INPUT3_ADC_PIN, INPUT3_ADC_FUNCTION},
+		{INPUT4_ADC_PIN, INPUT4_ADC_FUNCTION}
 	};
 
 	// Assign and enable GPIO pins to the ADC function.
@@ -761,8 +598,7 @@ void adc_process_init(void)
 	adcifa_get_calibration_data(adcifa, &adc_config_t);
 
 	// Configure ADCIFA core
-//debug 10apr15 	adcifa_configure(adcifa, &adc_config_t, FOSC0);
-	adcifa_configure(adcifa, &adc_config_t, 8000000); //10apr15
+	adcifa_configure(adcifa, &adc_config_t, 8000000);
 
 }
 
@@ -782,11 +618,9 @@ static void twi_init(void)
 		{PCA9952_TWI_SDA_PIN, PCA9952_TWI_SDA_FUNCTION}
 	};
 
-//7apr15	const twi_options_t PCA9952_TWI_OPTIONS = {
 	twi_options_t PCA9952_TWI_OPTIONS = { //7apr15 make this *not* a const so we can change it and rerun twi_master_init() if necessary
 		.pba_hz = FPBA_HZ,
 		.speed = PCA9952_TWI_MASTER_SPEED,
-//7apr15		.chip = PCA9952_TWI_ADDRESS,
 		.chip = PCA9952_U7_TOPDRIVE_TWI_ADDRESS, //7apr15
 		.smbus        = false,
 	};
