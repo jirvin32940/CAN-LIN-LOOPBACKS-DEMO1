@@ -686,6 +686,139 @@ void door_latch_open_kill_all_shelves(void)
 	led_shelf(3, LED_OFF);
 }
 
+unsigned char is_flash_storage_for_serial_ids_init(void);
+unsigned char is_flash_storage_for_serial_ids_init(void)
+{
+	
+}
+
+
+//TODO: Obviously this structure needs to go into a header file
+/* Data structure for serial ID and usage info */
+typedef struct {
+		
+	unsigned char id[6];			//48 bits
+	
+	unsigned char maxUsageReached;	//go/no-go flag
+		
+	unsigned char hrs_thous : 4;	/* usage time: kinda BCD */
+	unsigned char hrs_huns	: 4;
+	unsigned char hrs_tens	: 4;
+	unsigned char hrs_ones	: 4;
+	unsigned char min_tens	: 4;
+	unsigned char min_ones	: 4;
+		
+} SERIAL_ID_AND_USAGE;
+
+struct SERIAL_ID_AND_USAGE serialIdAndUsage[256];
+
+unsigned char write_serialIdStruct_to_flash(void);
+void read_serialIdStruct_from_flash(void);
+
+unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned char shelfIdx2, unsigned char shelfIdx3, unsigned char shelfIdx4);
+unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned char shelfIdx2, unsigned char shelfIdx3, unsigned char shelfIdx4)
+{
+	struct SERIAL_ID_AND_USAGE *tmp;
+	unsigned char upperLEDboardIdx;
+	unsigned char lowerLEDboardIdx;
+	
+	read_serialIdStruct_from_flash();
+	
+	for (unsigned char i=0; i<4; i++) //check every shelf
+	{
+		//TODO: check if the shelf is really active before incrementing the minutes for it
+		
+		switch (i)
+		{
+			case 0:
+				upperLEDboardIdx = upper_LEDboard_idx(shelfIdx1);
+				lowerLEDboardIdx = lower_LEDboard_idx(shelfIdx1);
+				break;
+			case 1:
+				upperLEDboardIdx = upper_LEDboard_idx(shelfIdx2);
+				lowerLEDboardIdx = lower_LEDboard_idx(shelfIdx2);
+				break;
+			case 2:
+				upperLEDboardIdx = upper_LEDboard_idx(shelfIdx3);
+				lowerLEDboardIdx = lower_LEDboard_idx(shelfIdx3);
+				break;
+			case 3:
+				upperLEDboardIdx = upper_LEDboard_idx(shelfIdx4);
+				lowerLEDboardIdx = lower_LEDboard_idx(shelfIdx4);
+				break;
+		}
+		
+		for (unsigned char j=0; j<2; j++)
+		{	
+			switch (j)
+			{
+				case 0:
+					tmp = &serialIdAndUsage[upperLEDboardIdx];
+					break;
+				case 1:
+					tmp = &serialIdAndUsage[lowerLEDboardIdx];
+					break;
+			}
+	
+			if (++tmp->min_ones > 9)
+			{
+				tmp->min_ones = 0;
+		
+				if (++tmp->min_tens > 5)
+				{
+					tmp->min_tens = 0;
+			
+					if (++tmp->hrs_ones > 9)
+					{
+						tmp->hrs_ones = 0;
+				
+						if (++tmp->hrs_tens > 9)
+						{
+							tmp->hrs_tens = 0;
+					
+							if (++tmp->hrs_huns > 9)
+							{
+								tmp->hrs_huns = 0;
+						
+								if (++tmp->hrs_thous > 1)
+								{
+									tmp->maxUsageReached = 1; //And...we're done. Reached 2000 hours.
+								}
+							}					
+						}
+					}
+				}
+			}
+		}
+	}
+
+	write_serialIdStruct_to_flash();
+}
+
+
+unsigned char init_flash_storage_for_serial_ids(void);
+unsigned char init_flash_storage_for_serial_ids(void)
+{
+	
+}
+
+void init_led_board_info(void);
+void init_led_board_info(void)
+{
+	unsigned char flashInit;
+	
+	read_serial_ids(); //see what boards are present
+	
+	flashInit = is_flash_storage_for_serial_ids_init();
+	
+	if (!flashInit)
+	{
+		
+	}
+	
+	
+}
+
 unsigned char firstTimeThrough = 1;
 
 /*! \brief Main File Section:
@@ -733,6 +866,8 @@ int main(void)
 	shelfTimerPtr[2] = &timerShelf2;
 	shelfTimerPtr[3] = &timerShelf3;
 	
+	init_led_board_info();
+	
 	gpio_set_pin_low(SEALSHIELD_LED_OEn); //...and we are live!
 	gpio_set_pin_low(SEALSHIELD_PSUPPLY_ONn); //turn the leds on first and then the power supply
 	
@@ -741,13 +876,6 @@ int main(void)
 
 	// Main loop
 	while (true) {
-
-#if 0 //for debugging the serial ID chips
-		while(1)
-		{
-			read_serial_ids();
-		}
-#endif
 
 		switch(sealShieldState)
 		{
