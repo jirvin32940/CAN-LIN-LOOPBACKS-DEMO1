@@ -73,6 +73,7 @@
 #include "cycle_counter.h"		//8apr15	
 #include "usart.h"				//9apr15
 #include "serial_id_ds2411.h"	//9apr15
+#include "flashc.h"				//2may15
 
 /*
  * ADC reading storage: for device detection
@@ -708,9 +709,45 @@ typedef struct {
 	unsigned char min_tens	: 4;
 	unsigned char min_ones	: 4;
 		
-} SERIAL_ID_AND_USAGE;
+} SERIAL_ID_AND_USAGE; //10 bytes each
 
-struct SERIAL_ID_AND_USAGE serialIdAndUsage[256];
+/*
+ * 2 copies: one for the even minute updates, one for the odd.
+ * Need these areas of flash to erase independently.
+ * It's very easy for the power to get shut down during the 
+ * one minute updates while the unit is sanitizing. Keeping these
+ * 2 areas of flash erasing and updating independently ensures that at
+ * least one buffer is intact if the other buffer gets corrupted.
+ */
+
+
+/*
+ * Don't let these structs exceed 2K bytes or they will overrun the flash areas they are assigned to.
+ */ 
+struct SERIAL_ID_AND_USAGE serialIdAndUsageEvenMinutes[96]; //96 is enough for 12 complete sets of LED board swap-outs (max 8 sides installed at a time), should be plenty for the life of the unit
+struct SERIAL_ID_AND_USAGE serialIdAndUsageOddMinutes[96];
+
+
+
+//! NVRAM data structure located in the flash array.
+#if defined (__GNUC__)
+__attribute__((__section__(".flash_nvram0")))
+#endif
+static SERIAL_ID_AND_USAGE serialIdAndUsageEvenMinutes
+#if defined (__ICCAVR32__)
+@ "FLASH_NVRAM0"
+#endif
+;
+
+#if defined (__GNUC__)
+__attribute__((__section__(".flash_nvram1")))
+#endif
+static SERIAL_ID_AND_USAGE serialIdAndUsageOddMinutes
+#if defined (__ICCAVR32__)
+@ "FLASH_NVRAM1"
+#endif
+;
+
 
 unsigned char write_serialIdStruct_to_flash(void);
 void read_serialIdStruct_from_flash(void);
