@@ -749,8 +749,37 @@ static SERIAL_ID_AND_USAGE serialIdAndUsageOddMinutes
 ;
 
 
-unsigned char write_serialIdStruct_to_flash(void);
-void read_serialIdStruct_from_flash(void);
+unsigned char write_serialIdStruct_to_flash(SERIAL_ID_AND_USAGE *pUsageBuf);
+unsigned char write_serialIdStruct_to_flash(SERIAL_ID_AND_USAGE *pUsageBuf)
+{
+	if (pingPong == EVEN)
+	{
+		flashc_memcpy(serialIdAndUsageEvenMinutes, pUsageBuf, sizeof(SERIAL_ID_AND_USAGE[96]),true)); //TODO: fix the source and destination buffers, think through shadow buffer vs. flash memory
+		//TODO: also think through the pingPong business, find a streamlined way to control which buffer we are writing (even vs. odd)
+	}
+	else //ODD
+	{
+		flashc_memcpy(serialIdAndUsageOddMinutes, pUsageBuf, sizeof(SERIAL_ID_AND_USAGE[96]),true));
+	}
+}
+
+
+
+void read_serialIdStruct_from_flash(unsigned char sel); //even or odd
+void read_serialIdStruct_from_flash(unsigned char sel)
+{
+	if (sel == EVEN)
+	{
+		memcpy(serialIdAndUsageEvenMinutes, flash_nvram0, sizeof(SERIAL_ID_AND_USAGE[96])); //TODO: standardize on how to represent size of this struct, gets used in multiple places	
+	}
+	else //ODD
+	{
+		memcpy(serialIdAndUsageOddMinutes, flash_nvram1, sizeof(SERIAL_ID_AND_USAGE[96])); //TODO: standardize on how to represent size of this struct, gets used in multiple places
+	}
+	
+}
+
+
 
 unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned char shelfIdx2, unsigned char shelfIdx3, unsigned char shelfIdx4);
 unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned char shelfIdx2, unsigned char shelfIdx3, unsigned char shelfIdx4)
@@ -784,16 +813,34 @@ unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned cha
 				lowerLEDboardIdx = lower_LEDboard_idx(shelfIdx4);
 				break;
 		}
+				
+		upperLEDboardMinuteUsageIdx = minute_usage_idx(upperLEDboardIdx);
+		lowerLEDboardMinuteUsageIdx = minute_usage_idx(lowerLEDboardIdx);
 		
 		for (unsigned char j=0; j<2; j++)
 		{	
 			switch (j)
 			{
 				case 0:
-					tmp = &serialIdAndUsage[upperLEDboardIdx];
+					if (pingPong == EVEN) {
+						
+						tmp = &serialIdAndUsageEvenMinutes[upperLEDboardMinuteUsageIdx];	
+						
+					}else { //ODD
+						
+						tmp = &serialIdAndUsageOddMinutes[upperLEDboardMinuteUsageIdx];
+					}
+					
 					break;
 				case 1:
-					tmp = &serialIdAndUsage[lowerLEDboardIdx];
+					if (pingPong == EVEN) {
+						
+						tmp = &serialIdAndUsageEvenMinutes[lowerLEDboardMinuteUsageIdx];
+						
+						}else { //ODD
+						
+						tmp = &serialIdAndUsageOddMinutes[lowerLEDboardMinuteUsageIdx];
+					}
 					break;
 			}
 	
@@ -829,7 +876,10 @@ unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned cha
 		}
 	}
 
-	write_serialIdStruct_to_flash();
+	write_serialIdStruct_to_flash(tmp);
+	
+	pingPong++;
+	pingPong &= 1; //toggle between 0 (EVEN) and 1 (ODD)
 }
 
 
