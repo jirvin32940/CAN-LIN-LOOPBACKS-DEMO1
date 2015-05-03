@@ -687,20 +687,21 @@ void door_latch_open_kill_all_shelves(void)
 	led_shelf(3, LED_OFF);
 }
 
-unsigned char is_flash_storage_for_serial_ids_init(void);
-unsigned char is_flash_storage_for_serial_ids_init(void)
-{
-	
-}
-
 
 //TODO: Obviously this structure needs to go into a header file
 /* Data structure for serial ID and usage info */
-typedef struct {
+typedef const struct {
 		
 	unsigned char id[6];			//48 bits
 	
-	unsigned char maxUsageReached;	//go/no-go flag
+	unsigned char maxUsageReached	:1;	//go/no-go flag
+	unsigned char top_botn			:1; //top .=. 1, bottom .=. 0 side of the LED board (track them independently)
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
 		
 	unsigned char hrs_thous : 4;	/* usage time: kinda BCD */
 	unsigned char hrs_huns	: 4;
@@ -712,8 +713,8 @@ typedef struct {
 } SERIAL_ID_AND_USAGE; //10 bytes each
 
 /*
- * 2 copies: one for the even minute updates, one for the odd.
- * Need these areas of flash to erase independently.
+ * 2 copies: one each for alternating minutes.
+ * Need these areas of flash to erase and be written independently.
  * It's very easy for the power to get shut down during the 
  * one minute updates while the unit is sanitizing. Keeping these
  * 2 areas of flash erasing and updating independently ensures that at
@@ -722,18 +723,20 @@ typedef struct {
 
 
 /*
- * Don't let these structs exceed 2K bytes or they will overrun the flash areas they are assigned to.
+ * NOTE: Don't let these structs exceed 2K bytes or they will overrun the flash areas they are assigned to.
  */ 
-struct SERIAL_ID_AND_USAGE serialIdAndUsageEvenMinutes[96]; //96 is enough for 12 complete sets of LED board swap-outs (max 8 sides installed at a time), should be plenty for the life of the unit
-struct SERIAL_ID_AND_USAGE serialIdAndUsageOddMinutes[96];
 
+#define NUM_SETS_LED_BOARD_SIDES	12	//should be enough for the lifetime of the unit
+#define LED_BOARD_SIDE_STRUCT_SIZE	10	//bytes
+
+struct SERIAL_ID_AND_USAGE usageShdw[2][NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES];
 
 
 //! NVRAM data structure located in the flash array.
 #if defined (__GNUC__)
 __attribute__((__section__(".flash_nvram0")))
 #endif
-static SERIAL_ID_AND_USAGE serialIdAndUsageEvenMinutes
+static SERIAL_ID_AND_USAGE serialIdAndUsageFlashZero[NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES]
 #if defined (__ICCAVR32__)
 @ "FLASH_NVRAM0"
 #endif
@@ -742,44 +745,154 @@ static SERIAL_ID_AND_USAGE serialIdAndUsageEvenMinutes
 #if defined (__GNUC__)
 __attribute__((__section__(".flash_nvram1")))
 #endif
-static SERIAL_ID_AND_USAGE serialIdAndUsageOddMinutes
+static SERIAL_ID_AND_USAGE serialIdAndUsageFlashOne[NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES]
 #if defined (__ICCAVR32__)
 @ "FLASH_NVRAM1"
 #endif
 ;
 
+unsigned char read_led_board_serial_ids(void);
+unsigned char read_usage_struct(unsigned char sel);
+void test_flash(unsigned char sel);
+void add_new_led_board_sides_to_usage(void);
+void calc_and_store_usage_csum(unsigned char sel);
+void copy_usage_to_usage(unsigned char dst, unsigned char src);
+void write_usage_to_flash(unsigned char sel);
+void load_usage_indeces(unsigned char sel);
 
-unsigned char write_serialIdStruct_to_flash(SERIAL_ID_AND_USAGE *pUsageBuf);
-unsigned char write_serialIdStruct_to_flash(SERIAL_ID_AND_USAGE *pUsageBuf)
+
+#define NO_LED_BOARD_PRESENT 0xFF
+
+
+unsigned char ledBoardIds[NUM_LED_BOARDS][6];
+unsigned char usageIdx[2][NUM_LED_BOARD_SIDES];
+
+
+enum { BOTTOM, TOP};
+
+unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char top_botn);
+unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char top_botn)
 {
-	if (pingPong == EVEN)
+	for (unsigned char i=0; i<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); i++)
 	{
-		flashc_memcpy(serialIdAndUsageEvenMinutes, pUsageBuf, sizeof(SERIAL_ID_AND_USAGE[96]),true)); //TODO: fix the source and destination buffers, think through shadow buffer vs. flash memory
-		//TODO: also think through the pingPong business, find a streamlined way to control which buffer we are writing (even vs. odd)
+		if ((strstr(idPtr, usageShdw[sel][i]->id)) && (usageShdw[sel][i]->top_botn == top_botn))
+		{
+			return (i); //Found a match!
+		}
 	}
-	else //ODD
-	{
-		flashc_memcpy(serialIdAndUsageOddMinutes, pUsageBuf, sizeof(SERIAL_ID_AND_USAGE[96]),true));
-	}
+
 }
 
-
-
-void read_serialIdStruct_from_flash(unsigned char sel); //even or odd
-void read_serialIdStruct_from_flash(unsigned char sel)
+void load_usage_indeces(unsigned char sel)
 {
-	if (sel == EVEN)
-	{
-		memcpy(serialIdAndUsageEvenMinutes, flash_nvram0, sizeof(SERIAL_ID_AND_USAGE[96])); //TODO: standardize on how to represent size of this struct, gets used in multiple places	
-	}
-	else //ODD
-	{
-		memcpy(serialIdAndUsageOddMinutes, flash_nvram1, sizeof(SERIAL_ID_AND_USAGE[96])); //TODO: standardize on how to represent size of this struct, gets used in multiple places
-	}
+	usageIdx[sel][0] = usage_idx(&ledBoardIds[0], BOTTOM);
+	usageIdx[sel][1] = usage_idx(&ledBoardIds[1], TOP);
+	usageIdx[sel][2] = usage_idx(&ledBoardIds[1], BOTTOM);
+	usageIdx[sel][3] = usage_idx(&ledBoardIds[2], TOP);
+	usageIdx[sel][4] = usage_idx(&ledBoardIds[2], BOTTOM);
+	usageIdx[sel][5] = usage_idx(&ledBoardIds[3], TOP);
+	usageIdx[sel][6] = usage_idx(&ledBoardIds[3], BOTTOM);
+	usageIdx[sel][7] = usage_idx(&ledBoardIds[4], TOP);
+}
+
+unsigned char read_led_board_serial_ids(void)
+{
 	
 }
 
+unsigned char read_usage_struct(unsigned char sel)
+{
+	if (sel == 0)
+	{
+		memcpy(&usageShdw[0],serialIdAndUsageFlashZero, sizeof(usageShdw[0]));
+	}
+	else
+	{
+		memcpy(&usageShdw[1],serialIdAndUsageFlashOne, sizeof(usageShdw[1]));
+	}
+}
 
+void test_flash(unsigned char sel)
+{
+	volatile void* memPtr;
+	unsigned char pattern, ubyte;
+	
+	if (sel == 0)
+	{
+		memPtr = &serialIdAndUsageFlashZero;
+	}
+	else
+	{
+		memPtr = &serialIdAndUsageFlashOne;
+	}
+
+	pattern = 0xFF;
+	flashc_memset(memPtr, pattern, 8, sizeof(usageShdw[0]), true);
+	for (unsigned long i=0; i<sizeof(usageShdw[sel]; i++)
+	{
+		if ()
+	}
+
+	flashc_memset(memPtr, pattern, 8, sizeof(usageShdw[0]), true);
+
+	flashc_memset(memPtr, pattern, 8, sizeof(usageShdw[0]), true);
+
+	flashc_memset(memPtr, pattern, 8, sizeof(usageShdw[0]), true);
+}
+
+void add_new_led_board_sides_to_usage(void)
+{
+	
+}
+
+void calc_and_store_usage_csum(unsigned char sel)
+{
+	
+}
+
+void copy_usage_to_usage(unsigned char dst, unsigned char src)
+{
+	memcpy(usageShdw[dst], usageShdw[src], sizeof(usageShdw[src]));
+}
+
+void write_usage_to_flash(unsigned char sel)
+{
+	if (sel == 0)
+	{
+		flashc_memcpy(serialIdAndUsageFlashZero, &usageShdw[0], sizeof(usageShdw[0]),true));
+	}
+	else
+	{
+		flashc_memcpy(serialIdAndUsageFlashOne, &usageShdw[1], sizeof(usageShdw[1]),true));
+	}
+}
+
+unsigned long calc_usage_current_led_boards(unsigned char sel)
+{
+	unsigned long hrs_thous = 0, 
+		hrs_huns = 0, 
+		hrs_tens = 0, 
+		hrs_ones = 0, 
+		min_tens = 0, 
+		min_ones = 0;
+		
+	unsigned char idx;
+	
+	for (unsigned char i=0; i<NUM_LED_BOARD_SIDES; i++)
+	{
+		if (usage_idx[sel][i] != NO_LED_BOARD_PRESENT)
+		{
+			idx = usage_idx[sel][i];
+					
+			hrs_thous += usageShdw[sel][idx]->hrs_thous;
+			hrs_huns += usageShdw[sel][idx]->hrs_huns;
+			hrs_tens += usageShdw[sel][idx]->hrs_tens;
+			hrs_ones += usageShdw[sel][idx]->hrs_ones;
+			min_tens += usageShdw[sel][idx]->min_tens;
+			min_ones += usageShdw[sel][idx]->min_ones;
+		}
+	}	
+}
 
 unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned char shelfIdx2, unsigned char shelfIdx3, unsigned char shelfIdx4);
 unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned char shelfIdx2, unsigned char shelfIdx3, unsigned char shelfIdx4)
@@ -788,7 +901,7 @@ unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned cha
 	unsigned char upperLEDboardIdx;
 	unsigned char lowerLEDboardIdx;
 	
-	read_serialIdStruct_from_flash();
+	read_usage_from_flash(pingPong);
 	
 	for (unsigned char i=0; i<4; i++) //check every shelf
 	{
@@ -822,25 +935,10 @@ unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned cha
 			switch (j)
 			{
 				case 0:
-					if (pingPong == EVEN) {
-						
-						tmp = &serialIdAndUsageEvenMinutes[upperLEDboardMinuteUsageIdx];	
-						
-					}else { //ODD
-						
-						tmp = &serialIdAndUsageOddMinutes[upperLEDboardMinuteUsageIdx];
-					}
-					
+					tmp = &usageShdw[pingPong][upperLEDboardMinuteUsageIdx];
 					break;
 				case 1:
-					if (pingPong == EVEN) {
-						
-						tmp = &serialIdAndUsageEvenMinutes[lowerLEDboardMinuteUsageIdx];
-						
-						}else { //ODD
-						
-						tmp = &serialIdAndUsageOddMinutes[lowerLEDboardMinuteUsageIdx];
-					}
+					tmp = &usageShdw[pingPong][lowerLEDboardMinuteUsageIdx];
 					break;
 			}
 	
@@ -876,33 +974,96 @@ unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned cha
 		}
 	}
 
-	write_serialIdStruct_to_flash(tmp);
+	write_usage_to_flash(pingPong);
 	
 	pingPong++;
 	pingPong &= 1; //toggle between 0 (EVEN) and 1 (ODD)
 }
 
 
-unsigned char init_flash_storage_for_serial_ids(void);
-unsigned char init_flash_storage_for_serial_ids(void)
-{
-	
-}
 
 void init_led_board_info(void);
 void init_led_board_info(void)
 {
-	unsigned char flashInit;
+	unsigned char usage0good, usage1good;
+	unsigned int usage0cnt, usage1cnt;
+	unsigned char newer, older, previouslyOlder;
+	unsigned char good, bad, previouslyBad;
 	
-	read_serial_ids(); //see what boards are present
+	read_led_board_serial_ids();
+	usage0good = read_usage_struct(0);
+	usage1good = read_usage_struct(1);
 	
-	flashInit = is_flash_storage_for_serial_ids_init();
-	
-	if (!flashInit)
+	if (usage0good)
 	{
-		
+		load_usage_indeces(0);
 	}
 	
+	if (usage1good)
+	{
+		load_usage_indeces(1);
+	}
+	
+	if ((!usage0good) && (!usage1good)) //Chassis is probably powering up for the first time
+	{
+		test_flash(0);
+		test_flash(1);
+		add_new_led_board_sides_to_usage(0);
+		calc_and_store_usage_csum(0);
+		copy_usage_to_usage(1,0);
+		write_usage_to_flash(0);
+		write_usage_to_flash(1);
+		pingPong = 0;
+		
+	}
+	else if (usage0good && usage1good) //Both usage structs are good, find the newer one
+	{
+		usage0cnt = calc_usage_current_led_boards(0);
+		usage1cnt = calc_usage_current_led_boards(1);
+		
+		if (usage0cnt >= usage1cnt)
+		{
+			newer = 0;
+		}
+		else
+		{
+			newer = 1;
+		}
+		older = newer ^ 1; //bad is the opposite of good
+		
+		test_flash(older);
+		add_new_led_board_sides_to_usage(newer);
+		calc_and_store_usage_csum(newer);
+		copy_usage_to_usage(older, newer);
+		previouslyOlder = older;
+		write_usage_to_flash(previouslyOlder);
+		test_flash(newer);
+		write_usage_to_flash(newer);
+		pingPong = 0;
+		
+	}
+	else //Only one usage struct is good, the other was probably corrupted during a power-down while sanitizing
+	{
+		if (usage0good)
+		{
+			good = 0;
+		}
+		else
+		{
+			good = 1;
+		}
+		bad = good ^ 1; //bad is the opposite of good
+		
+		test_flash(bad);
+		add_new_led_board_sides_to_usage(good);
+		calc_and_store_usage_csum(good);
+		copy_usage_to_usage(bad, good);
+		previouslyBad = bad;
+		write_usage_to_flash(previouslyBad);
+		test_flash(good);
+		write_usage_to_flash(good);
+		pingPong = 0;
+	}
 	
 }
 
@@ -910,7 +1071,6 @@ unsigned char firstTimeThrough = 1;
 
 /*! \brief Main File Section:
  *          - Initialization (CPU, TWI, Usart,...)
- *          - Main loop with task management (CAN, LIN, ADC)
  */
 int main(void)
 {
