@@ -223,8 +223,8 @@ enum {
 int ledBoardPresent[NUM_LED_BOARDS];
 
 /* One serial ID chip per board */
-void read_serial_ids(void);
-void read_serial_ids(void)
+void read_led_board_serial_ids(void);
+void read_led_board_serial_ids(void)
 {
 	/*
 	 * Check for LED board presence by issuing a reset to the serial ID chip and checking for a response.
@@ -729,7 +729,13 @@ typedef const struct {
 #define NUM_SETS_LED_BOARD_SIDES	12	//should be enough for the lifetime of the unit
 #define LED_BOARD_SIDE_STRUCT_SIZE	10	//bytes
 
-struct SERIAL_ID_AND_USAGE usageShdw[2][NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES];
+
+typedef struct {
+		SERIAL_ID_AND_USAGE u[NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES];
+		unsigned char		csum;
+	} USAGE_SHADOW;
+
+struct USAGE_SHADOW usageShdw[2];
 
 
 //! NVRAM data structure located in the flash array.
@@ -751,11 +757,10 @@ static SERIAL_ID_AND_USAGE serialIdAndUsageFlashOne[NUM_SETS_LED_BOARD_SIDES * N
 #endif
 ;
 
-unsigned char read_led_board_serial_ids(void);
 unsigned char read_usage_struct(unsigned char sel);
 void test_flash(unsigned char sel);
 void add_new_led_board_sides_to_usage(void);
-void calc_and_store_usage_csum(unsigned char sel);
+void calc_usage_csum(unsigned char sel);
 void copy_usage_to_usage(unsigned char dst, unsigned char src);
 void write_usage_to_flash(unsigned char sel);
 void load_usage_indeces(unsigned char sel);
@@ -775,11 +780,13 @@ unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char 
 {
 	for (unsigned char i=0; i<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); i++)
 	{
-		if ((strstr(idPtr, usageShdw[sel][i]->id)) && (usageShdw[sel][i]->top_botn == top_botn))
+		if ((strstr(idPtr, usageShdw[sel]->u[i]->id)) && (usageShdw[sel]->u[i]->top_botn == top_botn))
 		{
 			return (i); //Found a match!
 		}
 	}
+	
+	return NO_LED_BOARD_PRESENT;
 
 }
 
@@ -795,11 +802,6 @@ void load_usage_indeces(unsigned char sel)
 	usageIdx[sel][7] = usage_idx(&ledBoardIds[4], TOP);
 }
 
-unsigned char read_led_board_serial_ids(void)
-{
-	
-}
-
 unsigned char read_usage_struct(unsigned char sel)
 {
 	if (sel == 0)
@@ -812,10 +814,15 @@ unsigned char read_usage_struct(unsigned char sel)
 	}
 }
 
+enum {SUCCESS, ERROR};
+
 void test_flash(unsigned char sel)
 {
 	volatile void* memPtr;
-	unsigned char pattern, ubyte;
+	unsigned char pattern[4] = {0xFF, 0x00, 0xAA, 0x55}, memSize, ubyte;
+	unsigned char *ubPtr;
+	
+	memSize = sizeof(usageShdw[se]]);
 	
 	if (sel == 0)
 	{
@@ -826,28 +833,123 @@ void test_flash(unsigned char sel)
 		memPtr = &serialIdAndUsageFlashOne;
 	}
 
-	pattern = 0xFF;
-	flashc_memset(memPtr, pattern, 8, sizeof(usageShdw[0]), true);
-	for (unsigned long i=0; i<sizeof(usageShdw[sel]; i++)
+	for (unsigned char i=0; i<4; i++) //4 patterns to test
 	{
-		if ()
+		flashc_memset(memPtr, pattern[i], 8, memSize, true);
+	
+		ubPtr = memPtr;
+		for (unsigned long j=0; j<memSize; j++)
+		{
+			ubyte = (*ubPtr);
+			if (ubyte != pattern[i])
+			{
+				return ERROR;
+			}
+			ubPtr++;
+		}
 	}
-
-	flashc_memset(memPtr, pattern, 8, sizeof(usageShdw[0]), true);
-
-	flashc_memset(memPtr, pattern, 8, sizeof(usageShdw[0]), true);
-
-	flashc_memset(memPtr, pattern, 8, sizeof(usageShdw[0]), true);
+	
+	return SUCCESS;
 }
 
-void add_new_led_board_sides_to_usage(void)
+
+#define USAGE_FULL 0xFF
+
+unsigned char find_first_open_usage_slot(unsigned char sel);
+unsigned char find_first_open_usage_slot(unsigned char sel)
 {
+	for (unsigned int i=0; i<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); i++)
+	{
+		if (usageIdx[sel][i] == NO_LED_BOARD_PRESENT)
+		{
+			return i;
+		}
+	}
+	
+	return USAGE_FULL; //Error, no open slots
+}
+
+void add_new_led_board_sides_to_usage(unsigned char sel)
+{
+	unsigned char firstOpenSlot, slotAssignment, sideToBoardIdx, top_botn;
+	
+	//NOTE that load_usage_indeces() must have been run already for this function to work. 
+	// i.e., usageIdx[][] must be populated.
+	
+	firstOpenSlot = find_first_open_usage_slot(sel);
+	
+	slotAssignment = firstOpenSlot;
+	
+	for (unsigned char i=0; i<NUM_LED_BOARD_SIDES; i++)
+	{
+		switch (i)
+		{
+			case 0:
+				sideToBoardIdx = 0;
+				break;
+			case 1:
+			case 2:
+				sideToBoardIdx = 1;
+				break;
+			case 3:
+			case 4:
+				sideToBoardIdx = 2;
+				break;
+			case 5:
+			case 6:
+				sideToBoardIdx = 3;
+				break;
+			case 7:
+				sideToBoardIdx = 4;
+				break;
+		}
+		
+		top_botn = (i%2) ? TOP : BOTTOM; //odd sides are top, even sides are bottom
+		
+		if (ledBoardPresent[sideToBoardIdx]) && (usageIdx[sel][i] == NO_LED_BOARD_PRESENT))
+		{
+			usageShdw[sel]->u[slotAssignment]->id[0] = ledBoardSerialId[1];
+			usageShdw[sel]->u[slotAssignment]->id[1] = ledBoardSerialId[2];
+			usageShdw[sel]->u[slotAssignment]->id[2] = ledBoardSerialId[3];
+			usageShdw[sel]->u[slotAssignment]->id[3] = ledBoardSerialId[4];
+			usageShdw[sel]->u[slotAssignment]->id[4] = ledBoardSerialId[5];
+			usageShdw[sel]->u[slotAssignment]->id[5] = ledBoardSerialId[6];
+			
+			usageShdw[sel]->u[slotAssignment]->top_botn = top_botn;
+
+			usageIdx[sel]->u[slotAssignment++];
+		}
+	}
 	
 }
 
-void calc_and_store_usage_csum(unsigned char sel)
+void calc_usage_csum(unsigned char sel)
 {
+	unsigned char csum = 0;
 	
+/*
+ * Lots of ways to checksum this struct, don't over-think it
+ */
+
+	for (unsigned char i=0; i<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); i++)
+	{
+		csum += usageShdw[sel]->u[i]->hrs_thous;
+		csum += usageShdw[sel]->u[i]->hrs_huns;
+		csum += usageShdw[sel]->u[i]->hrs_tens;
+		csum += usageShdw[sel]->u[i]->hrs_mins;
+		csum += usageShdw[sel]->u[i]->min_tens;
+		csum += usageShdw[sel]->u[i]->min_ones;
+		
+		csum += usageShdw[sel]->u[i]->id[0];
+		csum += usageShdw[sel]->u[i]->id[1];
+		csum += usageShdw[sel]->u[i]->id[2];
+		csum += usageShdw[sel]->u[i]->id[3];
+		csum += usageShdw[sel]->u[i]->id[4];
+		csum += usageShdw[sel]->u[i]->id[5];
+		
+		csum += usageShdw[sel]->u[i]->maxUsageReached;
+		csum += usageShdw[sel]->u[i]->top_botn;
+	}
 }
 
 void copy_usage_to_usage(unsigned char dst, unsigned char src)
@@ -877,21 +979,28 @@ unsigned long calc_usage_current_led_boards(unsigned char sel)
 		min_ones = 0;
 		
 	unsigned char idx;
+	unsigned long retMinutes;
 	
 	for (unsigned char i=0; i<NUM_LED_BOARD_SIDES; i++)
 	{
-		if (usage_idx[sel][i] != NO_LED_BOARD_PRESENT)
+		if (usageIdx[sel][i] != NO_LED_BOARD_PRESENT)
 		{
 			idx = usage_idx[sel][i];
 					
-			hrs_thous += usageShdw[sel][idx]->hrs_thous;
-			hrs_huns += usageShdw[sel][idx]->hrs_huns;
-			hrs_tens += usageShdw[sel][idx]->hrs_tens;
-			hrs_ones += usageShdw[sel][idx]->hrs_ones;
-			min_tens += usageShdw[sel][idx]->min_tens;
-			min_ones += usageShdw[sel][idx]->min_ones;
+			hrs_thous += usageShdw[sel]->u[idx]->hrs_thous;
+			hrs_huns += usageShdw[sel]->u[idx]->hrs_huns;
+			hrs_tens += usageShdw[sel]->u[idx]->hrs_tens;
+			hrs_ones += usageShdw[sel]->u[idx]->hrs_ones;
+			min_tens += usageShdw[sel]->u[idx]->min_tens;
+			min_ones += usageShdw[sel]->u[idx]->min_ones;
 		}
-	}	
+	}
+	
+	retMinutes = (hrs_thous * 1000) + (hrs_huns * 100) + (hrs_tens * 10) + (hrs_ones);
+	retMinutes *= 60;
+	retMinutes += ((min_tens * 10) + (min_ones));
+	
+	return retMinutes;
 }
 
 unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned char shelfIdx2, unsigned char shelfIdx3, unsigned char shelfIdx4);
@@ -935,10 +1044,10 @@ unsigned char increment_ledBoard_usage_min(unsigned char shelfIdx1, unsigned cha
 			switch (j)
 			{
 				case 0:
-					tmp = &usageShdw[pingPong][upperLEDboardMinuteUsageIdx];
+					tmp = &usageShdw[pingPong]->u[upperLEDboardMinuteUsageIdx];
 					break;
 				case 1:
-					tmp = &usageShdw[pingPong][lowerLEDboardMinuteUsageIdx];
+					tmp = &usageShdw[pingPong]->u[lowerLEDboardMinuteUsageIdx];
 					break;
 			}
 	
@@ -998,10 +1107,18 @@ void init_led_board_info(void)
 	{
 		load_usage_indeces(0);
 	}
+	else
+	{
+		memset(&usageShdw[0], 0x00, sizeof(usageShdw[0]));
+	}
 	
 	if (usage1good)
 	{
 		load_usage_indeces(1);
+	}
+	else
+	{
+		memset(&usageShdw[1], 0x00, sizeof(usageShdw[1]));
 	}
 	
 	if ((!usage0good) && (!usage1good)) //Chassis is probably powering up for the first time
@@ -1009,7 +1126,7 @@ void init_led_board_info(void)
 		test_flash(0);
 		test_flash(1);
 		add_new_led_board_sides_to_usage(0);
-		calc_and_store_usage_csum(0);
+		calc_usage_csum(0);
 		copy_usage_to_usage(1,0);
 		write_usage_to_flash(0);
 		write_usage_to_flash(1);
@@ -1033,7 +1150,7 @@ void init_led_board_info(void)
 		
 		test_flash(older);
 		add_new_led_board_sides_to_usage(newer);
-		calc_and_store_usage_csum(newer);
+		calc_usage_csum(newer);
 		copy_usage_to_usage(older, newer);
 		previouslyOlder = older;
 		write_usage_to_flash(previouslyOlder);
@@ -1056,7 +1173,7 @@ void init_led_board_info(void)
 		
 		test_flash(bad);
 		add_new_led_board_sides_to_usage(good);
-		calc_and_store_usage_csum(good);
+		calc__usage_csum(good);
 		copy_usage_to_usage(bad, good);
 		previouslyBad = bad;
 		write_usage_to_flash(previouslyBad);
