@@ -59,7 +59,7 @@
 
 #include "compiler.h"
 
-#define SS_ONE_SECOND 8000000
+#define EC_ONE_SECOND 8000000
 
 
 //! Structure holding private information, automatically initialized by the

@@ -564,7 +564,7 @@
     <Folder Include="src\conf\" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="src\conf_sealshield.h">
+    <None Include="src\conf_eclave.h">
       <SubType>compile</SubType>
     </None>
     <Compile Include="src\serial_id_ds2411.h">
@@ -573,10 +573,10 @@
     <Compile Include="src\serial_id_ds2411.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\ss_print_funcs.c">
+    <Compile Include="src\ec_print_funcs.c">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\ss_print_funcs.h">
+    <Compile Include="src\ec_print_funcs.h">
       <SubType>compile</SubType>
     </Compile>
     <None Include="src\asf.h">

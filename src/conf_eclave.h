@@ -44,8 +44,8 @@
  * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
 
-#ifndef _CONF_SEALSHIELD_H_
-#define _CONF_SEALSHIELD_H_
+#ifndef _CONF_ECLAVE_H_
+#define _CONF_ECLAVE_H_
 
 #include "board.h"
 #include "conf_clock.h"
@@ -101,4 +101,4 @@
 // Timer Counter Channel Used
 #define TC_CHANNEL                   0
 
-#endif //_CONF_SEALSHIELD_H_
+#endif //_CONF_ECLAVE_H_

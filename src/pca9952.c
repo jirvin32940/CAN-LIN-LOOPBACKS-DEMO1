@@ -140,7 +140,6 @@ twi_package_t twi_package;
 }
 
 
-//7apr15 void PCA9952_init(int32_t fcpu) //TODO: maybe don't need fcpu, we'll see.
 void PCA9952_init(void) //7apr15
 {
 	volatile uint8_t tmp1, tmp2, tmp3, tmp4;

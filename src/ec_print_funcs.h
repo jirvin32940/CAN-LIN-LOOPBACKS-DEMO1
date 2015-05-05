@@ -46,8 +46,8 @@
  */
 
 
-#ifndef _SS_PRINT_FUNCS_H_
-#define _SS_PRINT_FUNCS_H_
+#ifndef _EC_PRINT_FUNCS_H_
+#define _EC_PRINT_FUNCS_H_
 
 /**
  * \defgroup group_avr32_utils_print_funcs USART Debug strings
@@ -256,4 +256,4 @@ extern void print_hex(volatile avr32_usart_t *usart, unsigned long n);
  * \}
  */
 
-#endif  // _SS_PRINT_FUNCS_H_
+#endif  // _EC_PRINT_FUNCS_H_

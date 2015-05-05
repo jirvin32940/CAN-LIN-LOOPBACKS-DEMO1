@@ -6,7 +6,7 @@
 #include "cycle_counter.h"
 #include "serial_id_ds2411.h"
 
-#define SS_ONE_MICROSECOND 8
+#define EC_ONE_MICROSECOND 8
 
 unsigned char io_pin(unsigned char idx);
 unsigned char io_pin(unsigned char idx)
@@ -14,19 +14,19 @@ unsigned char io_pin(unsigned char idx)
 	switch (idx)
 	{
 		case 0:
-			return SEALSHIELD_SERIAL_ID0;
+			return ECLAVE_SERIAL_ID0;
 			break;
 		case 1:
-			return SEALSHIELD_SERIAL_ID1;
+			return ECLAVE_SERIAL_ID1;
 			break;
 		case 2:
-			return SEALSHIELD_SERIAL_ID2;
+			return ECLAVE_SERIAL_ID2;
 			break;
 		case 3:
-			return SEALSHIELD_SERIAL_ID3;
+			return ECLAVE_SERIAL_ID3;
 			break;
 		case 4:
-			return SEALSHIELD_SERIAL_ID4;
+			return ECLAVE_SERIAL_ID4;
 			break;
 		default: 
 			return 0; //TODO: return a better error code here
