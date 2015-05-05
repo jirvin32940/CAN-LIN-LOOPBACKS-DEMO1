@@ -49,16 +49,16 @@
 #include "compiler.h"
 #include "gpio.h"
 #include "usart.h"
-#include "ss_print_funcs.h"
+#include "ec_print_funcs.h"
 
 
 //! ASCII representation of hexadecimal digits.
 static const char HEX_DIGITS[16] = "0123456789ABCDEF";
 
 
-void init_ssdbg_rs232(long pba_hz)
+void init_ecdbg_rs232(long pba_hz)
 {
-  init_ssdbg_rs232_ex(SSDBG_USART_BAUDRATE, pba_hz);
+  init_ecdbg_rs232_ex(ECDBG_USART_BAUDRATE, pba_hz);
 }
 
 void init_display_rs232(long pba_hz)
@@ -67,16 +67,16 @@ void init_display_rs232(long pba_hz)
 }
 
 
-void init_ssdbg_rs232_ex(unsigned long baudrate, long pba_hz)
+void init_ecdbg_rs232_ex(unsigned long baudrate, long pba_hz)
 {
-  static const gpio_map_t SSDBG_USART_GPIO_MAP =
+  static const gpio_map_t ECDBG_USART_GPIO_MAP =
   {
-    {SSDBG_USART_RX_PIN, SSDBG_USART_RX_FUNCTION},
-    {SSDBG_USART_TX_PIN, SSDBG_USART_TX_FUNCTION}
+    {ECDBG_USART_RX_PIN, ECDBG_USART_RX_FUNCTION},
+    {ECDBG_USART_TX_PIN, ECDBG_USART_TX_FUNCTION}
   };
 
   // Options for debug USART.
-  usart_options_t ssdbg_usart_options =
+  usart_options_t ecdbg_usart_options =
   {
     .baudrate = baudrate,
     .charlength = 8,
@@ -86,11 +86,11 @@ void init_ssdbg_rs232_ex(unsigned long baudrate, long pba_hz)
   };
 
   // Setup GPIO for debug USART.
-  gpio_enable_module(SSDBG_USART_GPIO_MAP,
-                     sizeof(SSDBG_USART_GPIO_MAP) / sizeof(SSDBG_USART_GPIO_MAP[0]));
+  gpio_enable_module(ECDBG_USART_GPIO_MAP,
+                     sizeof(ECDBG_USART_GPIO_MAP) / sizeof(ECDBG_USART_GPIO_MAP[0]));
 
   // Initialize it in RS232 mode.
-  usart_init_rs232(SSDBG_USART, &ssdbg_usart_options, pba_hz);
+  usart_init_rs232(ECDBG_USART, &ecdbg_usart_options, pba_hz);
 }
 
 void init_display_rs232_ex(unsigned long baudrate, long pba_hz)
@@ -120,10 +120,10 @@ void init_display_rs232_ex(unsigned long baudrate, long pba_hz)
 }
 
 
-void print_ssdbg(const char *str)
+void print_ecdbg(const char *str)
 {
   // Redirection to the debug USART.
-  print(SSDBG_USART, str);
+  print(ECDBG_USART, str);
 }
 
 void print_display(const char *str)
@@ -133,10 +133,10 @@ void print_display(const char *str)
 }
 
 
-void print_ssdbg_char(int c)
+void print_ecdbg_char(int c)
 {
   // Redirection to the debug USART.
-  print_char(SSDBG_USART, c);
+  print_char(ECDBG_USART, c);
 }
 
 void print_display_char(int c)
@@ -146,10 +146,10 @@ void print_display_char(int c)
 }
 
 
-void print_ssdbg_ulong(unsigned long n)
+void print_ecdbg_ulong(unsigned long n)
 {
   // Redirection to the debug USART.
-  print_ulong(SSDBG_USART, n);
+  print_ulong(ECDBG_USART, n);
 }
 
 void print_display_ulong(unsigned long n)
@@ -159,10 +159,10 @@ void print_display_ulong(unsigned long n)
 }
 
 
-void print_ssdbg_char_hex(unsigned char n)
+void print_ecdbg_char_hex(unsigned char n)
 {
   // Redirection to the debug USART.
-  print_char_hex(SSDBG_USART, n);
+  print_char_hex(ECDBG_USART, n);
 }
 
 void print_display_char_hex(unsigned char n)
@@ -172,10 +172,10 @@ void print_display_char_hex(unsigned char n)
 }
 
 
-void print_ssdbg_short_hex(unsigned short n)
+void print_ecdbg_short_hex(unsigned short n)
 {
   // Redirection to the debug USART.
-  print_short_hex(SSDBG_USART, n);
+  print_short_hex(ECDBG_USART, n);
 }
 
 void print_display_short_hex(unsigned short n)
@@ -185,11 +185,11 @@ void print_display_short_hex(unsigned short n)
 }
 
 
-void print_ssdbg_hex(unsigned long n);
-void print_ssdbg_hex(unsigned long n)
+void print_ecdbg_hex(unsigned long n);
+void print_ecdbg_hex(unsigned long n)
 {
   // Redirection to the debug USART.
-  print_hex(SSDBG_USART, n);
+  print_hex(ECDBG_USART, n);
 }
 
 void print_display_hex(unsigned long n);

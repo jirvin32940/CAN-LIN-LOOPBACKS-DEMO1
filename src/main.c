@@ -63,17 +63,88 @@
 #include "compiler.h"
 #include "power_clocks_lib.h"
 #include "gpio.h"
-#include "ss_print_funcs.h" //8apr15 changed from print_funcs.h
+#include "ec_print_funcs.h" //8apr15 changed from print_funcs.h
 #include "flashc.h"
 #include "adcifa.h"
 #include "twim.h"
 #include "conf_pca9952.h" //6apr15
 #include "pca9952.h" //7apr15
-#include "conf_sealshield.h"	//8apr15
+#include "conf_eclave.h"	//8apr15
 #include "cycle_counter.h"		//8apr15	
 #include "usart.h"				//9apr15
 #include "serial_id_ds2411.h"	//9apr15
 #include "flashc.h"				//2may15
+#include "stringz.h"
+
+
+unsigned char read_usage_struct(unsigned char sel);
+void test_flash(unsigned char sel);
+void add_new_led_board_sides_to_usage(void);
+void calc_usage_csum(unsigned char sel);
+void copy_usage_to_usage(unsigned char dst, unsigned char src);
+void write_usage_to_flash(unsigned char sel);
+void load_usage_indeces(unsigned char sel);
+
+
+#define NO_LED_BOARD_PRESENT 0xFF
+
+
+#define NUM_LED_BOARDS			5
+#define NUM_LED_BOARD_SIDES		8
+#define NUM_SHELVES				4	//Shelf 0 is board 0 bottom + board 1 top
+//Shelf 1 is board 1 bottom + board 2 top
+//Shelf 2 is board 2 bottom + board 3 top
+//Shelf 3 is board 3 bottom + board 4 top
+//Board 0 top and board 4 bottom are not used
+
+
+unsigned char ledBoardIds[NUM_LED_BOARDS][6];
+unsigned char usageIdx[2][NUM_LED_BOARD_SIDES];
+
+
+enum { BOTTOM, TOP};
+
+
+/*
+ * NOTE: Don't let these structs exceed 2K bytes or they will overrun the flash areas they are assigned to.
+ */ 
+
+#define NUM_SETS_LED_BOARD_SIDES	12	//should be enough for the lifetime of the unit
+#define LED_BOARD_SIDE_STRUCT_SIZE	10	//bytes
+
+
+/* Data structure for serial ID and usage info */
+typedef const struct {
+	
+	unsigned char id[6];			//48 bits
+	
+	unsigned char maxUsageReached	:1;	//go/no-go flag
+	unsigned char top_botn			:1; //top .=. 1, bottom .=. 0 side of the LED board (track them independently)
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	
+	unsigned char hrs_thous : 4;	/* usage time: kinda BCD */
+	unsigned char hrs_huns	: 4;
+	unsigned char hrs_tens	: 4;
+	unsigned char hrs_ones	: 4;
+	unsigned char min_tens	: 4;
+	unsigned char min_ones	: 4;
+	
+} SERIAL_ID_AND_USAGE; //10 bytes each
+
+
+
+typedef struct {
+		SERIAL_ID_AND_USAGE u[NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES];
+		unsigned char		csum;
+	} USAGE_SHADOW;
+
+struct USAGE_SHADOW usageShdw[2];
+
 
 /*
  * ADC reading storage: for device detection
@@ -136,13 +207,6 @@ volatile U16 adc_current_conversion;
 #define SS_DOOR_LATCHED (!gpio_get_pin_value(ECLAVE_DOOR_LATCH)) //12apr15 this is the correct sense for the equipment going to the show
 #define SS_ACTION_PB	(!gpio_get_pin_value(ECLAVE_ACTION_PB)) //12apr15 this is the correct sense for the equipment going to the show
 
-#define NUM_LED_BOARDS			5
-#define NUM_LED_BOARD_SIDES		8
-#define NUM_SHELVES				4	//Shelf 0 is board 0 bottom + board 1 top
-									//Shelf 1 is board 1 bottom + board 2 top
-									//Shelf 2 is board 2 bottom + board 3 top
-									//Shelf 3 is board 3 bottom + board 4 top
-									//Board 0 top and board 4 bottom are not used
 
 enum {
 	SHELF_ACTIVE,
@@ -265,7 +329,7 @@ unsigned char check_led_brd_side_lifetime(unsigned char ledBrdSide)
 {
 	unsigned char idx;
 	unsigned int hours
-	float intensity;
+	__attribute__ float intensity;
 	
 	/*
 	 * Find the record for this board's serial ID number, and check the usage hours and see if we
@@ -285,7 +349,7 @@ unsigned char check_led_brd_side_lifetime(unsigned char ledBrdSide)
  */
 	intensity = ((0.00002 * hours * hours) - (0.0699 * hours) + 92.879);
 		
-	ledSizeSanitizeMinutes[ledBrdSide] = (20 * 100)/intensity; //Shortest sanitize time is 20 minutes. Sanitize time increases as LED intensity drops with usage. Sanitize time is around 49 minutes when usage is at 2000 hours.
+	ledSideSanitizeMinutes[ledBrdSide] = (20 * 100)/intensity; //Shortest sanitize time is 20 minutes. Sanitize time increases as LED intensity drops with usage. Sanitize time is around 49 minutes when usage is at 2000 hours.
 	
 	if (hours < 1999)
 	{
@@ -516,7 +580,7 @@ void set_shelves_active_inactive(void)
 	{
 		shelfActive[0] = SHELF_ACTIVE;
 		numActiveShelves++;
-		print_ssdbg("Shelf 0 active\r\n");
+		print_ecdbg("Shelf 0 active\r\n");
 	}
 	
 	/* check shelf 1 */
@@ -529,7 +593,7 @@ void set_shelves_active_inactive(void)
 	{
 		shelfActive[1] = SHELF_ACTIVE;
 		numActiveShelves++;
-		print_ssdbg("Shelf 1 active\r\n");
+		print_ecdbg("Shelf 1 active\r\n");
 	}
 	
 	/* check shelf 2 */
@@ -542,7 +606,7 @@ void set_shelves_active_inactive(void)
 	{
 		shelfActive[2] = SHELF_ACTIVE;
 		numActiveShelves++;
-		print_ssdbg("Shelf 2 active\r\n");
+		print_ecdbg("Shelf 2 active\r\n");
 	}
 	
 	/* check shelf 3 */
@@ -555,7 +619,7 @@ void set_shelves_active_inactive(void)
 	{
 		shelfActive[3] = SHELF_ACTIVE;
 		numActiveShelves++;
-		print_ssdbg("Shelf 3 active\r\n");
+		print_ecdbg("Shelf 3 active\r\n");
 	}
 }
 
@@ -713,6 +777,8 @@ t_cpu_time timerShelf0, timerShelf1, timerShelf2, timerShelf3, timerClean, timer
 
 unsigned char shelfActive[NUM_SHELVES];
 unsigned long shelfTimerInitMinutes[NUM_SHELVES];
+unsigned long displayTimerSeconds;
+t_cpu_time displayTimer;
 unsigned int ledSideSanitizeMinutes[NUM_LED_BOARD_SIDES];
 t_cpu_time shelfTimer[NUM_SHELVES];
 t_cpu_time* shelfTimerPtr[NUM_SHELVES] = {&shelfTimer[0], &shelfTimer[1], &shelfTimer[2], &shelfTimer[3]};
@@ -732,29 +798,6 @@ void door_latch_open_kill_all_shelves(void)
 }
 
 
-/* Data structure for serial ID and usage info */
-typedef const struct {
-		
-	unsigned char id[6];			//48 bits
-	
-	unsigned char maxUsageReached	:1;	//go/no-go flag
-	unsigned char top_botn			:1; //top .=. 1, bottom .=. 0 side of the LED board (track them independently)
-	unsigned char					:1;
-	unsigned char					:1;
-	unsigned char					:1;
-	unsigned char					:1;
-	unsigned char					:1;
-	unsigned char					:1;
-		
-	unsigned char hrs_thous : 4;	/* usage time: kinda BCD */
-	unsigned char hrs_huns	: 4;
-	unsigned char hrs_tens	: 4;
-	unsigned char hrs_ones	: 4;
-	unsigned char min_tens	: 4;
-	unsigned char min_ones	: 4;
-		
-} SERIAL_ID_AND_USAGE; //10 bytes each
-
 /*
  * 2 copies: one each for alternating minutes.
  * Need these areas of flash to erase and be written independently.
@@ -764,21 +807,6 @@ typedef const struct {
  * least one buffer is intact if the other buffer gets corrupted.
  */
 
-
-/*
- * NOTE: Don't let these structs exceed 2K bytes or they will overrun the flash areas they are assigned to.
- */ 
-
-#define NUM_SETS_LED_BOARD_SIDES	12	//should be enough for the lifetime of the unit
-#define LED_BOARD_SIDE_STRUCT_SIZE	10	//bytes
-
-
-typedef struct {
-		SERIAL_ID_AND_USAGE u[NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES];
-		unsigned char		csum;
-	} USAGE_SHADOW;
-
-struct USAGE_SHADOW usageShdw[2];
 
 
 //! NVRAM data structure located in the flash array.
@@ -799,24 +827,6 @@ static SERIAL_ID_AND_USAGE serialIdAndUsageFlashOne[NUM_SETS_LED_BOARD_SIDES * N
 @ "FLASH_NVRAM1"
 #endif
 ;
-
-unsigned char read_usage_struct(unsigned char sel);
-void test_flash(unsigned char sel);
-void add_new_led_board_sides_to_usage(void);
-void calc_usage_csum(unsigned char sel);
-void copy_usage_to_usage(unsigned char dst, unsigned char src);
-void write_usage_to_flash(unsigned char sel);
-void load_usage_indeces(unsigned char sel);
-
-
-#define NO_LED_BOARD_PRESENT 0xFF
-
-
-unsigned char ledBoardIds[NUM_LED_BOARDS][6];
-unsigned char usageIdx[2][NUM_LED_BOARD_SIDES];
-
-
-enum { BOTTOM, TOP};
 
 unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char top_botn);
 unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char top_botn)
@@ -880,7 +890,7 @@ void test_flash(unsigned char sel)
 	unsigned char pattern[4] = {0xFF, 0x00, 0xAA, 0x55}, memSize, ubyte;
 	unsigned char *ubPtr;
 	
-	memSize = sizeof(usageShdw[se]]);
+	memSize = sizeof(usageShdw[sel]);
 	
 	if (sel == 0)
 	{
@@ -1263,7 +1273,7 @@ int main(void)
 	init_display_rs232(FPBA_HZ);
 
 	// Print Startup Message
-	print_ssdbg("SEAL SHIELD DEMO \r\n Copyright (c) 2015 Technical Solutions Group, Inc.\r\n");
+	print_ecdbg("SEAL SHIELD DEMO \r\n Copyright (c) 2015 Technical Solutions Group, Inc.\r\n");
 	display_text(IDX_READY);
 	
 	// Initialize ADC for bluesense channels which are used to see if there are any devices (phones, tablets, etc.) on the shelves
@@ -1305,7 +1315,7 @@ int main(void)
 			case STATE_SS_IDLE:
 				if (SS_DOOR_LATCHED) {
 					gpio_set_pin_low(ECLAVE_DEBUG_LED);
-					print_ssdbg("Door latch detected\r\n");
+					print_ecdbg("Door latch detected\r\n");
 //					display_text(IDX_CLEAR);
 					display_text(IDX_READY);
 					sealShieldState = STATE_DOOR_LATCHED;
@@ -1315,7 +1325,7 @@ int main(void)
 				
 			case STATE_DOOR_LATCHED:
 				if (!SS_ACTION_PB) {
-					print_ssdbg("Action push button press detected\r\n");
+					print_ecdbg("Action push button press detected\r\n");
 					sealShieldState = STATE_ACTION_PB_PRESSED;
 				}
 				break;
@@ -1323,7 +1333,7 @@ int main(void)
 			case STATE_ACTION_PB_PRESSED:
 				if (SS_ACTION_PB)
 				{
-					print_ssdbg("Action push button release detected\r\n");
+					print_ecdbg("Action push button release detected\r\n");
 					sealShieldState = STATE_ACTION_PB_RELEASED;	
 				}
 				break;
@@ -1335,7 +1345,7 @@ int main(void)
 				
 				if (num_active_shelves() != 0) {
 					sealShieldState = STATE_START_SANITIZE;	
-					print_ssdbg("Start sanitizing\r\n");
+					print_ecdbg("Start sanitizing\r\n");
 					display_text(IDX_CLEAR);
 					cpu_delay_ms(500, 8000000);
 					display_text(IDX_CLEANING);
@@ -1343,7 +1353,7 @@ int main(void)
 				}
 				else {
 					sealShieldState = STATE_START_CLEAN;
-					print_ssdbg("Either no devices or shelves are past lifetime, charging devices\r\n");
+					print_ecdbg("No shelves, no devices or shelves are past lifetime, charging devices\r\n");
 //					display_text(IDX_CLEAR);
 					display_text(IDX_READY);
 				}
@@ -1355,17 +1365,20 @@ int main(void)
 					if (shelfActive[i] == SHELF_ACTIVE) {
 						shelfTimerInitMinutes[i] = calc_sanitize_time(i);
 						
-						led_shelf(i, LED_ON); //12apr15 turning the shelves on and leaving them on for the show. Use the timers I set up to cycle through the display text.
+						led_shelf(i, LED_ON);
 						
 						if (sanitizeIdx == 0xFF)
 						{
-							sanitizeIdx = i; //set this to the first active shelf
+							sanitizeIdx = i; //set this to the first active shelf if this is the first active shelf encountered
 						}
 					}
 					else {
 						shelfTimerInitMinutes[i] = 0; //Don't run this shelf
 					}
 				}
+				
+				displayTimerSeconds = cpu_ms_2_cy(8000, 8000000); //8 seconds per "shelf" display is enough time for the word to scroll twice
+				cpu_set_timeout(displayTimerSeconds, &displayTimer);
 				
 				sealShieldState = STATE_SANITIZE_1;
 				break;
@@ -1374,11 +1387,11 @@ int main(void)
 				display_text(IDX_CLEAR);
 				cpu_delay_ms(500, 8000000); //half second
 				
-				cpu_set_timeout(60000, &oneMinuteTimer); //one minute for the usage statistics
+				cpu_set_timeout(cpu_ms_2_cy(60000,8000000), &oneMinuteTimer); //one minute for the usage statistics
 				
-				if (shelfTimerInitMinutes[sanitizeIdx] != 0)
+				if (shelfActive[sanitizeIdx] == SHELF_ACTIVE)
 				{
-					cpu_set_timeout(shelfTimerInitMinutes[sanitizeIdx], shelfTimerPtr[sanitizeIdx]); //cpu cycle counts and the pointer to the timer variable for this particular shelf
+					cpu_set_timeout(displayTimerSeconds, &displayTimer); //8 seconds per shelf
 					switch (sanitizeIdx)
 					{
 						case 0:
@@ -1399,7 +1412,7 @@ int main(void)
 							break;
 					}
 
-//12apr15 shelf st					led_shelf(sanitizeIdx, LED_ON);	//NOTE we need to be careful here, we need to be able to shut off the shelf LEDs the *instant* the door latch opens, this is important for safety
+					//NOTE we need to be careful here, we need to be able to shut off the shelf LEDs the *instant* the door latch opens, this is important for safety
 					//this means we need as little logic between turning the shelf on and turning it off so we can react as quickly as possible to the door latch
 										
 					sealShieldState = STATE_SANITIZE_2;
@@ -1426,9 +1439,9 @@ int main(void)
 				}
 
 				if (cpu_is_timeout(shelfTimerPtr[sanitizeIdx])) {
-//12apr15 leave shelves on indefinitely for the show					led_shelf(sanitizeIdx, LED_OFF);
+					led_shelf(sanitizeIdx, LED_OFF);
 					cpu_stop_timeout(shelfTimerPtr[sanitizeIdx]);
-					print_ssdbg("Shelf clean\r\n");
+					print_ecdbg("Shelf clean\r\n");
 
 					//All done, go to the next shelf
 					if (++sanitizeIdx >= NUM_SHELVES)
@@ -1453,7 +1466,7 @@ int main(void)
 				if (cpu_is_timeout(&timerClean)) {
 					cpu_stop_timeout(&timerClean);
 					sealShieldState = STATE_ACTION_PB_RELEASED;	
-					print_ssdbg("Start sanitizing\r\n");
+					print_ecdbg("Start sanitizing\r\n");
 
 				}
 				break;
@@ -1493,7 +1506,7 @@ int main(void)
 				}
 
 				sealShieldState = STATE_SHUTDOWN_PROCESSES;
-				print_ssdbg("Door latch opened, shutting down all processes\r\n");
+				print_ecdbg("Door latch opened, shutting down all processes\r\n");
 				firstTimeThrough = 0;
 				
 			}

@@ -71,13 +71,13 @@
  * Debug UART (We can make this whatever we want, choosing: 115200, N, 8, 1)
  */
 
-#  define SSDBG_USART               (&AVR32_USART0)
-#  define SSDBG_USART_RX_PIN        AVR32_USART0_RXD_0_1_PIN
-#  define SSDBG_USART_RX_FUNCTION   AVR32_USART0_RXD_0_1_FUNCTION
-#  define SSDBG_USART_TX_PIN        AVR32_USART0_TXD_0_1_PIN
-#  define SSDBG_USART_TX_FUNCTION   AVR32_USART0_TXD_0_1_FUNCTION
-#  define SSDBG_USART_IRQ           AVR32_USART0_IRQ
-#  define SSDBG_USART_BAUDRATE      115200
+#  define ECDBG_USART               (&AVR32_USART0)
+#  define ECDBG_USART_RX_PIN        AVR32_USART0_RXD_0_1_PIN
+#  define ECDBG_USART_RX_FUNCTION   AVR32_USART0_RXD_0_1_FUNCTION
+#  define ECDBG_USART_TX_PIN        AVR32_USART0_TXD_0_1_PIN
+#  define ECDBG_USART_TX_FUNCTION   AVR32_USART0_TXD_0_1_FUNCTION
+#  define ECDBG_USART_IRQ           AVR32_USART0_IRQ
+#  define ECDBG_USART_BAUDRATE      115200
 
 /*
  * Display UART: 2400, 1 (parity), 8 (data), 1 (stop)
@@ -155,7 +155,7 @@
  *
  * \param pba_hz PBA clock frequency (Hz).
  */
-extern void init_ssdbg_rs232(long pba_hz);
+extern void init_ecdbg_rs232(long pba_hz);
 extern void init_display_rs232(long pba_hz);
 
 
@@ -164,42 +164,42 @@ extern void init_display_rs232(long pba_hz);
  * \param baudrate Baud rate to set DBG_USART to.
  * \param pba_hz PBA clock frequency (Hz).
  */
-extern void init_ssdbg_rs232_ex(unsigned long baudrate, long pba_hz);
+extern void init_ecdbg_rs232_ex(unsigned long baudrate, long pba_hz);
 extern void init_display_rs232_ex(unsigned long baudrate, long pba_hz);
 
 /*! \brief Prints a string of characters to DBG_USART.
  *
  * \param str The string of characters to print.
  */
-extern void print_ssdbg(const char *str);
+extern void print_ecdbg(const char *str);
 extern void print_display(const char *str);
 
 /*! \brief Prints a character to DBG_USART.
  *
  * \param c The character to print.
  */
-extern void print_ssdbg_char(int c);
+extern void print_ecdbg_char(int c);
 extern void print_display_char(int c);
 
 /*! \brief Prints an integer to DBG_USART in a decimal representation.
  *
  * \param n The integer to print.
  */
-extern void print_ssdbg_ulong(unsigned long n);
+extern void print_ecdbg_ulong(unsigned long n);
 extern void print_display_ulong(unsigned long n);
 
 /*! \brief Prints a char to DBG_USART in an hexadecimal representation.
  *
  * \param n The char to print.
  */
-extern void print_ssdbg_char_hex(unsigned char n);
+extern void print_ecdbg_char_hex(unsigned char n);
 extern void print_display_char_hex(unsigned char n);
 
 /*! \brief Prints a short integer to DBG_USART in an hexadecimal representation.
  *
  * \param n The short integer to print.
  */
-extern void print_ssdbg_short_hex(unsigned short n);
+extern void print_ecdbg_short_hex(unsigned short n);
 extern void print_display_short_hex(unsigned short n);
 
 /*! \brief Prints an integer to DBG_USART in an hexadecimal representation.

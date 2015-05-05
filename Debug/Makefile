@@ -94,7 +94,7 @@ SUBDIRS :=  \
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS +=  \
 ../src/serial_id_ds2411.c \
-../src/ss_print_funcs.c \
+../src/ec_print_funcs.c \
 ../src/ASF/avr32/boards/uc3c_ek/led.c \
 ../src/ASF/avr32/drivers/adcifa/adcifa.c \
 ../src/ASF/avr32/drivers/canif/canif.c \
@@ -126,7 +126,7 @@ ASM_SRCS +=
 
 OBJS +=  \
 src/serial_id_ds2411.o \
-src/ss_print_funcs.o \
+src/ec_print_funcs.o \
 src/ASF/avr32/boards/uc3c_ek/led.o \
 src/ASF/avr32/drivers/adcifa/adcifa.o \
 src/ASF/avr32/drivers/canif/canif.o \
@@ -151,7 +151,7 @@ src/main.o
 
 OBJS_AS_ARGS +=  \
 src/serial_id_ds2411.o \
-src/ss_print_funcs.o \
+src/ec_print_funcs.o \
 src/ASF/avr32/boards/uc3c_ek/led.o \
 src/ASF/avr32/drivers/adcifa/adcifa.o \
 src/ASF/avr32/drivers/canif/canif.o \
@@ -176,7 +176,7 @@ src/main.o
 
 C_DEPS +=  \
 src/serial_id_ds2411.d \
-src/ss_print_funcs.d \
+src/ec_print_funcs.d \
 src/ASF/avr32/boards/uc3c_ek/led.d \
 src/ASF/avr32/drivers/adcifa/adcifa.d \
 src/ASF/avr32/drivers/canif/canif.d \
@@ -201,7 +201,7 @@ src/main.d
 
 C_DEPS_AS_ARGS +=  \
 src/serial_id_ds2411.d \
-src/ss_print_funcs.d \
+src/ec_print_funcs.d \
 src/ASF/avr32/boards/uc3c_ek/led.d \
 src/ASF/avr32/drivers/adcifa/adcifa.d \
 src/ASF/avr32/drivers/canif/canif.d \
@@ -224,9 +224,9 @@ src/ASF/common/services/clock/uc3c/sysclk.d \
 src/pca9952.d \
 src/main.d
 
-OUTPUT_FILE_PATH +=CAN-LIN-LOOPBACKS-DEMO1.elf
+OUTPUT_FILE_PATH +=electroclave.elf
 
-OUTPUT_FILE_PATH_AS_ARGS +=CAN-LIN-LOOPBACKS-DEMO1.elf
+OUTPUT_FILE_PATH_AS_ARGS +=electroclave.elf
 
 ADDITIONAL_DEPENDENCIES:=
 
@@ -445,13 +445,13 @@ all: $(OUTPUT_FILE_PATH) $(ADDITIONAL_DEPENDENCIES)
 $(OUTPUT_FILE_PATH): $(OBJS) $(USER_OBJS) $(OUTPUT_FILE_DEP) $(LIB_DEP) $(LINKER_SCRIPT_DEP)
 	@echo Building target: $@
 	@echo Invoking: AVR32/GNU Linker : 4.4.7
-	$(QUOTE)C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-gcc.exe$(QUOTE) -o$(OUTPUT_FILE_PATH_AS_ARGS) $(OBJS_AS_ARGS) $(USER_OBJS) $(LIBS) -nostartfiles -Wl,-Map="CAN-LIN-LOOPBACKS-DEMO1.map" -Wl,--start-group -ldsp-at32ucr3fp-dspspeed_opt -lm  -Wl,--end-group -L"../src/ASF/avr32/utils/libs/dsplib/at32ucr3fp/gcc"  -Wl,--gc-sections --rodata-writable -Wl,--direct-data -mpart=uc3c1512c -Wl,-T../src/ASF/avr32/utils/linker_scripts/at32uc3c/0512c/gcc/link_uc3c0512c.lds -Wl,-e,_trampoline  
+	$(QUOTE)C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-gcc.exe$(QUOTE) -o$(OUTPUT_FILE_PATH_AS_ARGS) $(OBJS_AS_ARGS) $(USER_OBJS) $(LIBS) -nostartfiles -Wl,-Map="electroclave.map" -Wl,--start-group -ldsp-at32ucr3fp-dspspeed_opt -lm  -Wl,--end-group -L"../src/ASF/avr32/utils/libs/dsplib/at32ucr3fp/gcc"  -Wl,--gc-sections --rodata-writable -Wl,--direct-data -mpart=uc3c1512c -Wl,-T../src/ASF/avr32/utils/linker_scripts/at32uc3c/0512c/gcc/link_uc3c0512c.lds -Wl,-e,_trampoline  
 	@echo Finished building target: $@
-	"C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-objcopy.exe" -O ihex -R .eeprom -R .fuse -R .lock -R .signature "CAN-LIN-LOOPBACKS-DEMO1.elf" "CAN-LIN-LOOPBACKS-DEMO1.hex"
-	"C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-objcopy.exe" -j .eeprom  --set-section-flags=.eeprom=alloc,load --change-section-lma .eeprom=0  --no-change-warnings -O ihex "CAN-LIN-LOOPBACKS-DEMO1.elf" "CAN-LIN-LOOPBACKS-DEMO1.eep" || exit 0
-	"C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-objdump.exe" -h -S "CAN-LIN-LOOPBACKS-DEMO1.elf" > "CAN-LIN-LOOPBACKS-DEMO1.lss"
-	"C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-objcopy.exe" -O srec -R .eeprom -R .fuse -R .lock -R .signature -R .user_signatures "CAN-LIN-LOOPBACKS-DEMO1.elf" "CAN-LIN-LOOPBACKS-DEMO1.srec"
-	"C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-size.exe" "CAN-LIN-LOOPBACKS-DEMO1.elf"
+	"C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-objcopy.exe" -O ihex -R .eeprom -R .fuse -R .lock -R .signature "electroclave.elf" "electroclave.hex"
+	"C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-objcopy.exe" -j .eeprom  --set-section-flags=.eeprom=alloc,load --change-section-lma .eeprom=0  --no-change-warnings -O ihex "electroclave.elf" "electroclave.eep" || exit 0
+	"C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-objdump.exe" -h -S "electroclave.elf" > "electroclave.lss"
+	"C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-objcopy.exe" -O srec -R .eeprom -R .fuse -R .lock -R .signature -R .user_signatures "electroclave.elf" "electroclave.srec"
+	"C:\Program Files (x86)\Atmel\Atmel Toolchain\AVR32 GCC\Native\3.4.1067\avr32-gnu-toolchain\bin\avr32-size.exe" "electroclave.elf"
 	
 	
 
@@ -463,5 +463,5 @@ $(OUTPUT_FILE_PATH): $(OBJS) $(USER_OBJS) $(OUTPUT_FILE_DEP) $(LIB_DEP) $(LINKER
 clean:
 	-$(RM) $(OBJS_AS_ARGS) $(EXECUTABLES)  
 	-$(RM) $(C_DEPS_AS_ARGS)   
-	rm -rf "CAN-LIN-LOOPBACKS-DEMO1.elf" "CAN-LIN-LOOPBACKS-DEMO1.a" "CAN-LIN-LOOPBACKS-DEMO1.hex" "CAN-LIN-LOOPBACKS-DEMO1.lss" "CAN-LIN-LOOPBACKS-DEMO1.eep" "CAN-LIN-LOOPBACKS-DEMO1.map" "CAN-LIN-LOOPBACKS-DEMO1.srec" "CAN-LIN-LOOPBACKS-DEMO1.usersignatures"
+	rm -rf "electroclave.elf" "electroclave.a" "electroclave.hex" "electroclave.lss" "electroclave.eep" "electroclave.map" "electroclave.srec" "electroclave.usersignatures"
 	
