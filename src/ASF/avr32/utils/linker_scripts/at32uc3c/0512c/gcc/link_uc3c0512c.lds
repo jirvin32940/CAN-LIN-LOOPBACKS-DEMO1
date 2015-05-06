@@ -72,6 +72,8 @@ PHDRS
   INTRAM PT_NULL;
   HRAM0_AT_FLASH PT_LOAD;
   HRAM0 PT_NULL;
+  FLASH_NVRAM0 PT_LOAD;
+  FLASH_NVRAM1 PT_LOAD;
   USERPAGE PT_LOAD;
 }
 
@@ -297,12 +299,12 @@ SECTIONS
     *(.bss_hram0)
     PROVIDE(_bss_hram0_end = .);
   } >HRAM0 AT>HRAM0 :HRAM0
-  .flash_nvram0   ORIGIN(FLASH) + LENGTH(FLASH) - __flash_nvram_size__ - __flash_nvram_size__ (NOLOAD):  /* 2may15: buffer updated on even minutes */
+  .flash_nvram0   ORIGIN(FLASH) + LENGTH(FLASH) - __flash_nvram_size__ - __flash_nvram_size__ (NOLOAD):  /* 2may15: buffer updated every other minute */
   {
     *(.flash_nvram0)
   } >FLASH AT>FLASH :FLASH_NVRAM0
 
-  .flash_nvram1   ORIGIN(FLASH) + LENGTH(FLASH) - __flash_nvram_size__ (NOLOAD):  /* 2may15: buffer updated on odd minutes */
+  .flash_nvram1   ORIGIN(FLASH) + LENGTH(FLASH) - __flash_nvram_size__ (NOLOAD):  /* 2may15: buffer updated on alternate minutes */
   {
     *(.flash_nvram1)
   } >FLASH AT>FLASH :FLASH_NVRAM1

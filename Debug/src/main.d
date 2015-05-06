@@ -79,7 +79,8 @@ src/main.d src/main.o src/main.o: ../src/main.c \
  ../src/config/conf_clock.h \
  ../src/ASF/avr32/drivers/cpu/cycle_counter/cycle_counter.h \
  ../src/ASF/avr32/drivers/usart/usart.h ../src/serial_id_ds2411.h \
- ../src/ASF/avr32/utils/preprocessor/stringz.h
+ c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32-gnu-toolchain\bin\../lib/gcc/avr32/4.4.7/../../../../avr32/include/string.h \
+ c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32-gnu-toolchain\bin\../lib/gcc/avr32/4.4.7/../../../../avr32/include/sys/string.h
 
 ../src/ASF/avr32/utils/compiler.h:
 
@@ -251,4 +252,6 @@ c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32
 
 ../src/serial_id_ds2411.h:
 
-../src/ASF/avr32/utils/preprocessor/stringz.h:
+c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32-gnu-toolchain\bin\../lib/gcc/avr32/4.4.7/../../../../avr32/include/string.h:
+
+c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32-gnu-toolchain\bin\../lib/gcc/avr32/4.4.7/../../../../avr32/include/sys/string.h:
