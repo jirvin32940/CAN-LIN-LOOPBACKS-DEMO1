@@ -1532,4 +1532,11 @@ int main(void)
 			gpio_toggle_pin(ECLAVE_DEBUG_LED);
 		}
 	} //while(true)
+	
+	while (1)
+	{
+		
+		displayTimer = display_text;	
+	
+	}
 } //main
