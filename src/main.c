@@ -139,7 +139,7 @@ typedef struct {
 	
 	unsigned char maxUsageReached	:1;	//go/no-go flag
 	unsigned char top_botn			:1; //top .=. 1, bottom .=. 0 side of the LED board (track them independently)
-	unsigned char					:1;
+	unsigned char slotFilled		:1;
 	unsigned char					:1;
 	unsigned char					:1;
 	unsigned char					:1;
@@ -244,6 +244,15 @@ void display_text(unsigned char idx)
 	{
 		usart_putchar(DISPLAY_USART, ((unsigned char) ((*(cmdPtrArray[idx]+i)))));
 	}
+	
+}
+
+void chassis_error(void);
+void chassis_error(void)
+{
+	display_text(IDX_ERROR);
+	
+	while(1); //catastrophic error, just hang TODO: allow technician interface to work here possibly
 	
 }
 
@@ -933,7 +942,7 @@ unsigned char find_first_open_usage_slot(unsigned char sel)
 {
 	for (unsigned int i=0; i<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); i++)
 	{
-		if (usageIdx[sel][i] == NO_LED_BOARD_PRESENT)
+		if (!usageShdw[sel].u[i].slotFilled)
 		{
 			return i;
 		}
@@ -989,6 +998,8 @@ void add_new_led_board_sides_to_usage(unsigned char sel)
 			usageShdw[sel].u[slotAssignment].id[5] = ledBoardIds[sideToBoardIdx][6];
 			
 			usageShdw[sel].u[slotAssignment].top_botn = top_botn;
+			
+			usageShdw[sel].u[slotAssignment].slotFilled = 1;
 
 			usageIdx[sel][i] = slotAssignment++; //TODO: Is this really what I meant to do?
 		}
@@ -1201,8 +1212,14 @@ void init_led_board_info(void)
 	
 	if ((!usage0good) && (!usage1good)) //Chassis is probably powering up for the first time
 	{
-		test_flash(0);
-		test_flash(1);
+		if (test_flash(0) == ERROR)
+		{
+			chassis_error();
+		}
+		if (test_flash(1) == ERROR)
+		{
+			chassis_error();
+		}
 		add_new_led_board_sides_to_usage(0);
 		usageShdw[0].csum = calc_usage_csum(0);
 		copy_usage_to_usage(1,0);
@@ -1226,13 +1243,21 @@ void init_led_board_info(void)
 		}
 		older = newer ^ 1; //older is the opposite of newer
 		
-		test_flash(older);
+		if (test_flash(older) == ERROR)
+		{
+			chassis_error();
+		}
+
 		add_new_led_board_sides_to_usage(newer);
 		usageShdw[newer].csum = calc_usage_csum(newer);
 		copy_usage_to_usage(older, newer);
 		previouslyOlder = older;
 		write_usage_to_flash(previouslyOlder);
-		test_flash(newer);
+		if (test_flash(newer) == ERROR)
+		{
+			chassis_error();
+		}
+
 		write_usage_to_flash(newer);
 		pingPong = 0;
 		
@@ -1249,13 +1274,21 @@ void init_led_board_info(void)
 		}
 		bad = good ^ 1; //bad is the opposite of good
 		
-		test_flash(bad);
+		if (test_flash(bad) == ERROR)
+		{
+			chassis_error();
+		}
+		
 		add_new_led_board_sides_to_usage(good);
 		usageShdw[good].csum = calc_usage_csum(good);
 		copy_usage_to_usage(bad, good);
 		previouslyBad = bad;
 		write_usage_to_flash(previouslyBad);
-		test_flash(good);
+		if (test_flash(good) == ERROR)
+		{
+			chassis_error();
+		}
+		
 		write_usage_to_flash(good);
 		pingPong = 0;
 	}
@@ -1533,10 +1566,4 @@ int main(void)
 		}
 	} //while(true)
 	
-	while (1)
-	{
-		
-		displayTimer = display_text;	
-	
-	}
 } //main
