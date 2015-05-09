@@ -59,7 +59,8 @@
 
 #include "compiler.h"
 
-#define EC_ONE_SECOND 8000000
+#define EC_ONE_SECOND cpu_ms_2_cy(1000, 8000000)
+#define EC_ONE_MINUTE (60 * EC_ONE_SECOND)
 
 
 //! Structure holding private information, automatically initialized by the

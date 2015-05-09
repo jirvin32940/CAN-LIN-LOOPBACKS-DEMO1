@@ -102,25 +102,26 @@ unsigned char pingPong; //used to toggle between 2 regions of flash
 
 unsigned char ledBoardIds[NUM_LED_BOARDS][6];
 unsigned char usageIdx[2][NUM_LED_BOARD_SIDES];
+unsigned char ledSideSanitizeMinutes[NUM_LED_BOARD_SIDES];
 
 
 enum { BOTTOM, TOP};
 
 
-t_cpu_time timerShelf0, timerShelf1, timerShelf2, timerShelf3, timerClean, timerDebugLed;
 
 unsigned char shelfActive[NUM_SHELVES];
-unsigned long shelfTimerInitMinutes[NUM_SHELVES];
+unsigned long sanitizeMinutes;
+unsigned long tmpSanitizeMinutes;
 unsigned long displayTimerSeconds;
 t_cpu_time displayTimer;
-unsigned int ledSideSanitizeMinutes[NUM_LED_BOARD_SIDES];
-t_cpu_time shelfTimer[NUM_SHELVES];
-t_cpu_time* shelfTimerPtr[NUM_SHELVES] = {&shelfTimer[0], &shelfTimer[1], &shelfTimer[2], &shelfTimer[3]};
+t_cpu_time sanitizeTimer;
 t_cpu_time oneMinuteTimer;
+t_cpu_time cleanTimer; 
+t_cpu_time debugTimer;
 
-unsigned char sealShieldState;
-unsigned char anyShelvesStillSanitizing;
 
+
+unsigned char electroclaveState;
 
 
 /*
@@ -222,8 +223,8 @@ volatile U16 adc_current_conversion;
 #define ECLAVE_LED_OEn		AVR32_PIN_PA22
 #define ECLAVE_MFP			AVR32_PIN_PA21	//set to 1 for 1X, set to 0 for 4X
 
-#define SS_DOOR_LATCHED (!gpio_get_pin_value(ECLAVE_DOOR_LATCH)) //12apr15 this is the correct sense for the equipment going to the show
-#define SS_ACTION_PB	(!gpio_get_pin_value(ECLAVE_ACTION_PB)) //12apr15 this is the correct sense for the equipment going to the show
+#define EC_DOOR_LATCHED (!gpio_get_pin_value(ECLAVE_DOOR_LATCH)) //12apr15 this is the correct sense for the equipment going to the show
+#define EC_ACTION_PB	(!gpio_get_pin_value(ECLAVE_ACTION_PB)) //12apr15 this is the correct sense for the equipment going to the show
 
 
 enum {
@@ -745,13 +746,12 @@ static void twi_init(void)
 
 
 enum {
-	STATE_SS_IDLE,
+	STATE_EC_IDLE,
 	STATE_DOOR_LATCHED,
 	STATE_ACTION_PB_PRESSED,
 	STATE_ACTION_PB_RELEASED,
 	STATE_START_SANITIZE,
-	STATE_SANITIZE_1,
-	STATE_SANITIZE_2,
+	STATE_SANITIZE,
 	STATE_START_CLEAN,
 	STATE_CLEAN,
 	STATE_SHUTDOWN_PROCESSES
@@ -1269,7 +1269,7 @@ unsigned char firstTimeThrough = 1;
  */
 int main(void)
 {
-	static unsigned char sanitizeIdx = 0;
+	static unsigned char displayIdx = 0;
 	
 	// Initialize System Clock
 	init_sys_clocks();
@@ -1300,50 +1300,44 @@ int main(void)
 	gpio_set_pin_high(ECLAVE_LED_OEn); //make sure outputs are disabled at the chip level
 	PCA9952_init();
 	
-	sealShieldState = STATE_SS_IDLE;
-	
-	//using this structure makes the timer IDs index-able
-	shelfTimerPtr[0] = &timerShelf0;
-	shelfTimerPtr[1] = &timerShelf1;
-	shelfTimerPtr[2] = &timerShelf2;
-	shelfTimerPtr[3] = &timerShelf3;
+	electroclaveState = STATE_EC_IDLE;
 	
 	init_led_board_info();
 	
 	gpio_set_pin_low(ECLAVE_LED_OEn); //...and we are live!
 	gpio_set_pin_low(ECLAVE_PSUPPLY_ONn); //turn the leds on first and then the power supply
 	
-	cpu_set_timeout(EC_ONE_SECOND/2, &timerDebugLed);
+	cpu_set_timeout(EC_ONE_SECOND/2, &debugTimer);
 
 
 	// Main loop
 	while (true) {
 
-		switch(sealShieldState)
+		switch(electroclaveState)
 		{
-			case STATE_SS_IDLE:
-				if (SS_DOOR_LATCHED) {
+			case STATE_EC_IDLE:
+				if (EC_DOOR_LATCHED) {
 					gpio_set_pin_low(ECLAVE_DEBUG_LED);
 					print_ecdbg("Door latch detected\r\n");
 //					display_text(IDX_CLEAR);
 					display_text(IDX_READY);
-					sealShieldState = STATE_DOOR_LATCHED;
+					electroclaveState = STATE_DOOR_LATCHED;
 					firstTimeThrough = 1;
 				}
 				break;
 				
 			case STATE_DOOR_LATCHED:
-				if (!SS_ACTION_PB) {
+				if (!EC_ACTION_PB) {
 					print_ecdbg("Action push button press detected\r\n");
-					sealShieldState = STATE_ACTION_PB_PRESSED;
+					electroclaveState = STATE_ACTION_PB_PRESSED;
 				}
 				break;
 				
 			case STATE_ACTION_PB_PRESSED:
-				if (SS_ACTION_PB)
+				if (EC_ACTION_PB)
 				{
 					print_ecdbg("Action push button release detected\r\n");
-					sealShieldState = STATE_ACTION_PB_RELEASED;	
+					electroclaveState = STATE_ACTION_PB_RELEASED;	
 				}
 				break;
 				
@@ -1353,7 +1347,7 @@ int main(void)
 				set_shelves_active_inactive();
 				
 				if (num_active_shelves() != 0) {
-					sealShieldState = STATE_START_SANITIZE;	
+					electroclaveState = STATE_START_SANITIZE;	
 					print_ecdbg("Start sanitizing\r\n");
 					display_text(IDX_CLEAR);
 					cpu_delay_ms(500, 8000000);
@@ -1361,7 +1355,7 @@ int main(void)
 					cpu_delay_ms(3000, 8000000); //give display time to update, scroll all the way across
 				}
 				else {
-					sealShieldState = STATE_START_CLEAN;
+					electroclaveState = STATE_START_CLEAN;
 					print_ecdbg("No shelves, no devices or shelves are past lifetime, charging devices\r\n");
 //					display_text(IDX_CLEAR);
 					display_text(IDX_READY);
@@ -1369,39 +1363,48 @@ int main(void)
 				break;
 				
 			case STATE_START_SANITIZE:
-				sanitizeIdx = 0xFF; //this means not assigned yet
+				displayIdx = 0xFF; //this means not assigned yet
+				sanitizeMinutes = 0;
 				for (int i = 0; i<NUM_SHELVES; i++) {
 					if (shelfActive[i] == SHELF_ACTIVE) {
-						shelfTimerInitMinutes[i] = calc_sanitize_time(i);
+						tmpSanitizeMinutes = calc_sanitize_time(i);
+						
+						if (tmpSanitizeMinutes > sanitizeMinutes)
+						{
+							sanitizeMinutes = tmpSanitizeMinutes;
+						}
 						
 						led_shelf(i, LED_ON);
 						
-						if (sanitizeIdx == 0xFF)
+						if (displayIdx == 0xFF)
 						{
-							sanitizeIdx = i; //set this to the first active shelf if this is the first active shelf encountered
+							displayIdx = i; //set this to the first active shelf if this is the first active shelf encountered
 						}
-					}
-					else {
-						shelfTimerInitMinutes[i] = 0; //Don't run this shelf
 					}
 				}
 				
-				displayTimerSeconds = cpu_ms_2_cy(8000, 8000000); //8 seconds per "shelf" display is enough time for the word to scroll twice
+				displayTimerSeconds = cpu_ms_2_cy(8000, 8000000); //8 seconds per "shelf" display is enough time for the text to scroll twice
 				cpu_set_timeout(displayTimerSeconds, &displayTimer);
 				
-				sealShieldState = STATE_SANITIZE_1;
+				cpu_set_timeout((sanitizeMinutes * 60 * cpu_ms_2_cy(1000, 8000000)), &sanitizeTimer);
+				
+				cpu_set_timeout((60 * cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics
+
+				display_text(IDX_CLEAR);
+				cpu_delay_ms(500, 8000000); //half second TODO: figure out why this is here and get rid of it, don't like to just hang for no reason, especially when we need to be monitoring the door latch
+				
+				electroclaveState = STATE_SANITIZE;
+				
 				break;
 				
-			case STATE_SANITIZE_1:
-				display_text(IDX_CLEAR);
-				cpu_delay_ms(500, 8000000); //half second
-				
-				cpu_set_timeout(cpu_ms_2_cy(60000,8000000), &oneMinuteTimer); //one minute for the usage statistics
-				
-				if (shelfActive[sanitizeIdx] == SHELF_ACTIVE)
+			case STATE_SANITIZE:
+				/*
+    			 * Manage the display
+				 */
+				if (cpu_is_timeout(&displayTimer))
 				{
-					cpu_set_timeout(displayTimerSeconds, &displayTimer); //8 seconds per shelf
-					switch (sanitizeIdx)
+					cpu_stop_timeout(&displayTimer);
+					switch (displayIdx)
 					{
 						case 0:
 							//								display_text(IDX_CLEAR);
@@ -1420,24 +1423,30 @@ int main(void)
 							display_text(IDX_SHELF4);
 							break;
 					}
+					
+					while (1)
+					{
+						if (++displayIdx >= NUM_SHELVES)
+						{
+							displayIdx = 0; //12apr15 wrap around
+						}
+						
+						if (shelfActive[displayIdx])
+						{
+							break; //this shelf is active, we don't need to look for another one
+						}
+						
+					}
+
+					cpu_set_timeout(displayTimerSeconds, &displayTimer); //8 seconds per shelf
 
 					//NOTE we need to be careful here, we need to be able to shut off the shelf LEDs the *instant* the door latch opens, this is important for safety
 					//this means we need as little logic between turning the shelf on and turning it off so we can react as quickly as possible to the door latch
-										
-					sealShieldState = STATE_SANITIZE_2;
 				}
-				else
-				{
-					//Nothing on that shelf, go to the next shelf
-					if (++sanitizeIdx >= NUM_SHELVES)
-					{
-						sanitizeIdx = 0; //12apr15 wrap around
-					} 
-				}
-				break;
-				
-			case STATE_SANITIZE_2:
 
+				/*
+    			 * Manage storing usage statistics to flash
+				 */
 				if (cpu_is_timeout (&oneMinuteTimer))
 				{
 					cpu_stop_timeout (&oneMinuteTimer);
@@ -1447,34 +1456,30 @@ int main(void)
 					cpu_set_timeout(60000, &oneMinuteTimer); //one minute for the usage statistics
 				}
 
-				if (cpu_is_timeout(shelfTimerPtr[sanitizeIdx])) {
-					led_shelf(sanitizeIdx, LED_OFF);
-					cpu_stop_timeout(shelfTimerPtr[sanitizeIdx]);
+				/*
+    			 * Manage the sanitizer timer
+				 */
+				if (cpu_is_timeout(&sanitizeTimer)) {
+					
+					for (int i=0; i< NUM_SHELVES; i++)
+					{
+						led_shelf(i, LED_OFF); //turn off every shelf. (doesn't hurt to make sure that even non-active shelves are off.)
+					}
+					cpu_stop_timeout(&sanitizeTimer);
 					print_ecdbg("Shelf clean\r\n");
-
-					//All done, go to the next shelf
-					if (++sanitizeIdx >= NUM_SHELVES)
-					{
-						sanitizeIdx = 0;
-						sealShieldState = STATE_SANITIZE_1; //that was the last shelf, get out of sanitizing
-					}
-					else
-					{
-						sealShieldState = STATE_SANITIZE_1; //more shelves to clean possibly
-					}
 				}
 				break;
 				
 			case STATE_START_CLEAN:
 				display_text(IDX_CLEAN);
-				sealShieldState = STATE_CLEAN;
-				cpu_set_timeout((7*EC_ONE_SECOND), &timerClean); //Fixed for now just to make the display look good, show the string and let it wrap once TODO: make this what it needs to be
+				electroclaveState = STATE_CLEAN;
+				cpu_set_timeout((20 * 60 * cpu_ms_2_cy(1000, 80000000)), &cleanTimer); //TODO: this time period will be parameterized from the technician UART interface
 				break;	
 				
 			case STATE_CLEAN:
-				if (cpu_is_timeout(&timerClean)) {
-					cpu_stop_timeout(&timerClean);
-					sealShieldState = STATE_ACTION_PB_RELEASED;	
+				if (cpu_is_timeout(&cleanTimer)) {
+					cpu_stop_timeout(&cleanTimer);
+					electroclaveState = STATE_ACTION_PB_RELEASED;	
 					print_ecdbg("Start sanitizing\r\n");
 
 				}
@@ -1482,19 +1487,19 @@ int main(void)
 				
 			case STATE_SHUTDOWN_PROCESSES:
 				//Shutdown all processes that could harm the user or equipment if the door is open
-				led_shelf(0, LED_OFF);
-				led_shelf(1, LED_OFF);
-				led_shelf(2, LED_OFF);
-				led_shelf(3, LED_OFF);
-				sealShieldState = STATE_SS_IDLE;
+				for (int i=0; i< NUM_SHELVES; i++)
+				{
+					led_shelf(i, LED_OFF); //turn off every shelf. (doesn't hurt to make sure that even non-active shelves are off.)
+				}
+				electroclaveState = STATE_EC_IDLE;
 				break;
-		} //switch(sealShieldState)
+		} //switch(electroclaveState)
 		
 		/*
 		 * This check overrides everything going on in the state machine, if the user opens the door,
 		 * shut down all processes for safety
 		 */
-		if (!SS_DOOR_LATCHED) {
+		if (!EC_DOOR_LATCHED) {
 		
 			if (firstTimeThrough)
 			{
@@ -1502,10 +1507,9 @@ int main(void)
 
 				display_text(IDX_CLEAR);
 				cpu_delay_ms(500, 8000000);
-				switch (sealShieldState)
+				switch (electroclaveState)
 				{
-					case STATE_SANITIZE_1:
-					case STATE_SANITIZE_2:
+					case STATE_SANITIZE:
 						display_text(IDX_DIRTY);
 						break;
 					
@@ -1514,17 +1518,17 @@ int main(void)
 						break;
 				}
 
-				sealShieldState = STATE_SHUTDOWN_PROCESSES;
+				electroclaveState = STATE_SHUTDOWN_PROCESSES;
 				print_ecdbg("Door latch opened, shutting down all processes\r\n");
 				firstTimeThrough = 0;
 				
 			}
-		} //if (!SS_DOOR_LATCHED)
+		} //if (!EC_DOOR_LATCHED)
 		
-		if (cpu_is_timeout(&timerDebugLed))
+		if (cpu_is_timeout(&debugTimer))
 		{
-			cpu_stop_timeout(&timerDebugLed);
-			cpu_set_timeout((EC_ONE_SECOND/2), &timerDebugLed);
+			cpu_stop_timeout(&debugTimer);
+			cpu_set_timeout((EC_ONE_SECOND/2), &debugTimer);
 			gpio_toggle_pin(ECLAVE_DEBUG_LED);
 		}
 	} //while(true)
