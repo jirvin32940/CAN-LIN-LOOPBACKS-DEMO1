@@ -89,39 +89,71 @@ void load_usage_indeces(unsigned char sel);
 unsigned char pingPong; //used to toggle between 2 regions of flash
 
 #define NO_LED_BOARD_PRESENT 0xFF
-
-
 #define NUM_LED_BOARDS			5
 #define NUM_LED_BOARD_SIDES		8
 #define NUM_SHELVES				4	//Shelf 0 is board 0 bottom + board 1 top
-//Shelf 1 is board 1 bottom + board 2 top
-//Shelf 2 is board 2 bottom + board 3 top
-//Shelf 3 is board 3 bottom + board 4 top
-//Board 0 top and board 4 bottom are not used
+									//Shelf 1 is board 1 bottom + board 2 top
+									//Shelf 2 is board 2 bottom + board 3 top
+									//Shelf 3 is board 3 bottom + board 4 top
+									//Board 0 upper side and board 4 lower side are not used
 
 
-unsigned char ledBoardIds[NUM_LED_BOARDS][6];
 unsigned char usageIdx[2][NUM_LED_BOARD_SIDES];
-unsigned char ledSideSanitizeMinutes[NUM_LED_BOARD_SIDES];
 
 
 enum { BOTTOM, TOP};
 
 
+typedef struct {
+	
+	unsigned char active;
+	unsigned char tLedIdx;
+	unsigned char bLedIdx;
+	unsigned char devicesPresent;
 
-unsigned char shelfActive[NUM_SHELVES];
+} SHELF;
+
+
+typedef struct {
+	
+	unsigned char idFamily;
+	unsigned char id[6];
+	unsigned char idcsum;
+	unsigned char present;
+	unsigned char shelfIdx;
+	unsigned char uSideIdx;
+	unsigned char lSideIdx;
+	unsigned char uSideShelfIdx;
+	unsigned char lSideShelfIdx;
+	
+} LEDBRD;
+	
+typedef struct {
+	
+	unsigned char sanitizeMinutes;
+	unsigned char ushdwIdx;
+	unsigned char maxUsageReached;
+	unsigned char shelfIdx;
+	unsigned char boardIdx;
+	
+} LEDBRDSIDE;		
+
+
+SHELF shelf[NUM_SHELVES];
+LEDBRD ledBrd[NUM_LED_BOARDS];
+LEDBRDSIDE ledBrdSide[NUM_LED_BOARD_SIDES];
+
 unsigned long sanitizeMinutes;
 unsigned long tmpSanitizeMinutes;
 unsigned long displayTimerSeconds;
 t_cpu_time displayTimer;
 t_cpu_time sanitizeTimer;
 t_cpu_time oneMinuteTimer;
-t_cpu_time cleanTimer; 
+t_cpu_time cleanTimer;
 t_cpu_time debugTimer;
 
-
-
 unsigned char electroclaveState;
+
 
 
 /*
@@ -232,10 +264,6 @@ enum {
 	SHELF_INACTIVE
 };
 
-unsigned char brdSideWithinLifetimeLimit[NUM_LED_BOARD_SIDES];
-unsigned char devicesPresentOnShelf[NUM_SHELVES];
-unsigned char shelfActive[NUM_SHELVES];
-
 
 void display_text(unsigned char idx);
 void display_text(unsigned char idx)
@@ -298,8 +326,6 @@ void init_io(void)
 }
 
 
-unsigned char ledBrdSerialID[NUM_LED_BOARDS][8]; //5 boards, 8 bit family code + 48 bit serial number each board + 8 bit CRC
-
 /* LED board side designations: 2 sides per shelf */
 enum {
 	LED_BRD_0_BOT,	//shelf 0
@@ -312,8 +338,6 @@ enum {
 	LED_BRD_4_TOP	//shelf 3
 };
 
-int ledBoardPresent[NUM_LED_BOARDS];
-
 /* One serial ID chip per board */
 void read_led_board_serial_ids(void);
 void read_led_board_serial_ids(void)
@@ -324,22 +348,26 @@ void read_led_board_serial_ids(void)
 	
 	SetSpeed(1); //1==standard speed, not overdrive
 	
-	ledBoardPresent[0] = !OWTouchReset(0);
-	ledBoardPresent[1] = !OWTouchReset(1);
-	ledBoardPresent[2] = !OWTouchReset(2);
-	ledBoardPresent[3] = !OWTouchReset(3);
-	ledBoardPresent[4] = !OWTouchReset(4);
+	ledBrd[0].present = !OWTouchReset(0);
+	ledBrd[1].present = !OWTouchReset(1);
+	ledBrd[2].present = !OWTouchReset(2);
+	ledBrd[3].present = !OWTouchReset(3);
+	ledBrd[4].present = !OWTouchReset(4);
 	
 	for (int i=0; i<NUM_LED_BOARDS; i++)
 	{
-		if (ledBoardPresent[i])
+		if (ledBrd[i].present)
 		{
 			OWWriteByte(i, 0x33); //Read ID command
 			
-			for (int j=0; j<8; j++)
+			ledBrd[i].idFamily = OWReadByte(i);
+			
+			for (int j=0; j<6; j++)
 			{
-				ledBrdSerialID[i][j] = OWReadByte(i);
+				ledBrd[i].id[j] = OWReadByte(i);
 			}
+			
+			ledBrd[i].idcsum = OWReadByte(i);
 		}
 	}
 }
@@ -352,8 +380,8 @@ enum {
 };
 
 /* Each side of an LED board will get different usage */
-unsigned char check_led_brd_side_lifetime(unsigned char ledBrdSide);
-unsigned char check_led_brd_side_lifetime(unsigned char ledBrdSide)
+unsigned char check_led_brd_side_lifetime(unsigned char sideIdx);
+unsigned char check_led_brd_side_lifetime(unsigned char sideIdx)
 {
 	unsigned char idx;
 	unsigned int hours;
@@ -365,7 +393,7 @@ unsigned char check_led_brd_side_lifetime(unsigned char ledBrdSide)
 	 *	refurbished. 
 	 */
 	
-	idx = usageIdx[0][ledBrdSide];
+	idx = usageIdx[0][sideIdx];
 	hours = (usageShdw[0].u[idx].hrs_thous * 1000) +
 		(usageShdw[0].u[idx].hrs_huns * 100) +
 		(usageShdw[0].u[idx].hrs_tens * 10) +
@@ -377,7 +405,7 @@ unsigned char check_led_brd_side_lifetime(unsigned char ledBrdSide)
  */
 	intensity = ((0.00002 * hours * hours) - (0.0699 * hours) + 92.879);
 		
-	ledSideSanitizeMinutes[ledBrdSide] = (20 * 100)/intensity; //Shortest sanitize time is 20 minutes. Sanitize time increases as LED intensity drops with usage. Sanitize time is around 49 minutes when usage is at 2000 hours.
+	ledBrdSide[sideIdx].sanitizeMinutes = (20 * 100)/intensity; //Shortest sanitize time is 20 minutes. Sanitize time increases as LED intensity drops with usage. Sanitize time is around 49 minutes when usage is at 2000 hours.
 	
 	if (hours < 1999)
 	{
@@ -395,7 +423,7 @@ void check_led_brd_side_lifetimes(void)
 {
 	for (int i=0; i<NUM_LED_BOARD_SIDES; i++)
 	{
-		brdSideWithinLifetimeLimit[i] = check_led_brd_side_lifetime(i);
+		ledBrdSide[i].maxUsageReached = !check_led_brd_side_lifetime(i);
 	}
 }
 
@@ -514,14 +542,11 @@ void check_shelves_for_devices(void)
 {
 	for (int i=0; i<NUM_SHELVES; i++)
 	{
-		devicesPresentOnShelf[i] = check_shelf_for_devices(i);
+		shelf[i].devicesPresent = check_shelf_for_devices(i);
 	}
 }
 
 unsigned char numActiveShelves;
-
-unsigned char shelfPresent[NUM_SHELVES] = {0,0,0,0};
-
 
 unsigned char topEflag0, topEflag1, botEflag0, botEflag1;
 
@@ -595,57 +620,57 @@ void set_shelves_active_inactive(void)
 	
 	for (int i=0; i<NUM_SHELVES; i++)
 	{
-		shelfActive[i] = SHELF_INACTIVE;
+		shelf[i].active = SHELF_INACTIVE;
 		
 	}
 	
 	/* check shelf 0 */
-	if (ledBoardPresent[0] &&
-		ledBoardPresent[1] &&
-		devicesPresentOnShelf[0] && 
-		brdSideWithinLifetimeLimit[LED_BRD_0_BOT] &&
-		brdSideWithinLifetimeLimit[LED_BRD_1_TOP] )
+	if (ledBrd[0].present &&
+		ledBrd[1].present &&
+		shelf[0].devicesPresent && 
+		(!ledBrdSide[LED_BRD_0_BOT].maxUsageReached) &&
+		(!ledBrdSide[LED_BRD_1_TOP].maxUsageReached) )
 	{
-		shelfActive[0] = SHELF_ACTIVE;
+		shelf[0].active = SHELF_ACTIVE;
 		numActiveShelves++;
 		print_ecdbg("Shelf 0 active\r\n");
 	}
 	
 	/* check shelf 1 */
 	
-	if (ledBoardPresent[1] &&
-		ledBoardPresent[2] &&
-	devicesPresentOnShelf[1] &&
-	brdSideWithinLifetimeLimit[LED_BRD_1_BOT] &&
-	brdSideWithinLifetimeLimit[LED_BRD_2_TOP] )
+	if (ledBrd[1].present &&
+		ledBrd[2].present &&
+	shelf[1].devicesPresent &&
+	(!ledBrdSide[LED_BRD_1_BOT].maxUsageReached) &&
+	(!ledBrdSide[LED_BRD_2_TOP].maxUsageReached) )
 	{
-		shelfActive[1] = SHELF_ACTIVE;
+		shelf[1].active = SHELF_ACTIVE;
 		numActiveShelves++;
 		print_ecdbg("Shelf 1 active\r\n");
 	}
 	
 	/* check shelf 2 */
 	
-	if (ledBoardPresent[2] &&
-		ledBoardPresent[3] &&
-	devicesPresentOnShelf[2] &&
-	brdSideWithinLifetimeLimit[LED_BRD_2_BOT] &&
-	brdSideWithinLifetimeLimit[LED_BRD_3_TOP] )
+	if (ledBrd[2].present &&
+		ledBrd[3].present &&
+	shelf[2].devicesPresent &&
+	(!ledBrdSide[LED_BRD_2_BOT].maxUsageReached) &&
+	(!ledBrdSide[LED_BRD_3_TOP].maxUsageReached) )
 	{
-		shelfActive[2] = SHELF_ACTIVE;
+		shelf[2].active = SHELF_ACTIVE;
 		numActiveShelves++;
 		print_ecdbg("Shelf 2 active\r\n");
 	}
 	
 	/* check shelf 3 */
 	
-	if (ledBoardPresent[3] &&
-		ledBoardPresent[4] &&
-	devicesPresentOnShelf[3] &&
-	brdSideWithinLifetimeLimit[LED_BRD_3_BOT] &&
-	brdSideWithinLifetimeLimit[LED_BRD_4_TOP] )
+	if (ledBrd[3].present &&
+		ledBrd[4].present &&
+	shelf[3].devicesPresent &&
+	(!ledBrdSide[LED_BRD_3_BOT].maxUsageReached) &&
+	(!ledBrdSide[LED_BRD_4_TOP].maxUsageReached) )
 	{
-		shelfActive[3] = SHELF_ACTIVE;
+		shelf[3].active = SHELF_ACTIVE;
 		numActiveShelves++;
 		print_ecdbg("Shelf 3 active\r\n");
 	}
@@ -769,34 +794,20 @@ enum {
 unsigned long calc_sanitize_time(unsigned char shelfIdx);
 unsigned long calc_sanitize_time(unsigned char shelfIdx)
 {
-	uint32_t cyclesPerMin;
-	unsigned char topBoardMinutes, botBoardMinutes, minutes;
+	unsigned char uSideMinutes, lSideMinutes, minutes, boardIdx, sideIdx;
 	
-	cyclesPerMin = cpu_ms_2_cy(60000, 8000000);
+	boardIdx = shelf[shelfIdx].tLedIdx;							//top board in the shelf
+	sideIdx = ledBrd[boardIdx].lSideIdx;						//lower side of the top board
+	lSideMinutes = ledBrdSide[sideIdx].sanitizeMinutes;
 	
-	switch(shelfIdx)
-	{
-		case 0:
-			topBoardMinutes = ledSideSanitizeMinutes[0];
-			botBoardMinutes = ledSideSanitizeMinutes[1];
-			break;
-		case 1:
-			topBoardMinutes = ledSideSanitizeMinutes[2];
-			botBoardMinutes = ledSideSanitizeMinutes[3];
-			break;
-		case 2:
-			topBoardMinutes = ledSideSanitizeMinutes[4];
-			botBoardMinutes = ledSideSanitizeMinutes[5];
-			break;
-		case 3:
-			topBoardMinutes = ledSideSanitizeMinutes[6];
-			botBoardMinutes = ledSideSanitizeMinutes[7];
-			break;
-	}
+
+	boardIdx = shelf[shelfIdx].bLedIdx;							//bottom board in the shelf					
+	sideIdx = ledBrd[boardIdx].uSideIdx;						//upper side of the bottom board
+	uSideMinutes = ledBrdSide[sideIdx].sanitizeMinutes;
+
+	minutes = (uSideMinutes >= lSideMinutes) ? uSideMinutes : lSideMinutes; //choose the sanitize time for the more worn-out leds
 	
-	minutes = (topBoardMinutes >= botBoardMinutes) ? topBoardMinutes : botBoardMinutes; //choose the sanitize time for the more worn-out leds
-	
-	return (minutes*cyclesPerMin); //fudge for now, show the string and let it wrap once, looks better for the show
+	return (minutes * 60 * cpu_ms_2_cy(1000, 80000000));
 	
 }
 
@@ -858,14 +869,14 @@ unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char 
 
 void load_usage_indeces(unsigned char sel)
 {
-	usageIdx[sel][0] = usage_idx(sel, &ledBoardIds[0][0], BOTTOM);
-	usageIdx[sel][1] = usage_idx(sel, &ledBoardIds[1][0], TOP);
-	usageIdx[sel][2] = usage_idx(sel, &ledBoardIds[1][0], BOTTOM);
-	usageIdx[sel][3] = usage_idx(sel, &ledBoardIds[2][0], TOP);
-	usageIdx[sel][4] = usage_idx(sel, &ledBoardIds[2][0], BOTTOM);
-	usageIdx[sel][5] = usage_idx(sel, &ledBoardIds[3][0], TOP);
-	usageIdx[sel][6] = usage_idx(sel, &ledBoardIds[3][0], BOTTOM);
-	usageIdx[sel][7] = usage_idx(sel, &ledBoardIds[4][0], TOP);
+	usageIdx[sel][0] = usage_idx(sel, &ledBrd[0].id[0], BOTTOM);
+	usageIdx[sel][1] = usage_idx(sel, &ledBrd[1].id[0], TOP);
+	usageIdx[sel][2] = usage_idx(sel, &ledBrd[1].id[0], BOTTOM);
+	usageIdx[sel][3] = usage_idx(sel, &ledBrd[2].id[0], TOP);
+	usageIdx[sel][4] = usage_idx(sel, &ledBrd[2].id[0], BOTTOM);
+	usageIdx[sel][5] = usage_idx(sel, &ledBrd[3].id[0], TOP);
+	usageIdx[sel][6] = usage_idx(sel, &ledBrd[3].id[0], BOTTOM);
+	usageIdx[sel][7] = usage_idx(sel, &ledBrd[4].id[0], TOP);
 }
 
 enum{CHECKSUM_INVALID, CHECKSUM_VALID};
@@ -953,7 +964,7 @@ unsigned char find_first_open_usage_slot(unsigned char sel)
 
 void add_new_led_board_sides_to_usage(unsigned char sel)
 {
-	unsigned char firstOpenSlot, slotAssignment, sideToBoardIdx, top_botn;
+	unsigned char firstOpenSlot, slotAssignment, brdIdx, top_botn;
 	
 	//NOTE that load_usage_indeces() must have been run already for this function to work. 
 	// i.e., usageIdx[][] must be populated.
@@ -964,47 +975,21 @@ void add_new_led_board_sides_to_usage(unsigned char sel)
 	
 	for (unsigned char i=0; i<NUM_LED_BOARD_SIDES; i++)
 	{
-		switch (i)
-		{
-			case 0:
-				sideToBoardIdx = 0;
-				break;
-			case 1:
-			case 2:
-				sideToBoardIdx = 1;
-				break;
-			case 3:
-			case 4:
-				sideToBoardIdx = 2;
-				break;
-			case 5:
-			case 6:
-				sideToBoardIdx = 3;
-				break;
-			case 7:
-				sideToBoardIdx = 4;
-				break;
-		}
+		brdIdx = ledBrdSide[i].boardIdx;
 		
 		top_botn = (i%2) ? TOP : BOTTOM; //odd sides are top, even sides are bottom
 		
-		if ((ledBoardPresent[sideToBoardIdx]) && (usageIdx[sel][i] == NO_LED_BOARD_PRESENT))
+		if ((ledBrd[brdIdx].present) && (usageIdx[sel][i] == NO_LED_BOARD_PRESENT)) //TODO: do I need the NO_LED_BOARD_PRESENT check? this should always be open at this point
 		{
-			usageShdw[sel].u[slotAssignment].id[0] = ledBoardIds[sideToBoardIdx][1];
-			usageShdw[sel].u[slotAssignment].id[1] = ledBoardIds[sideToBoardIdx][2];
-			usageShdw[sel].u[slotAssignment].id[2] = ledBoardIds[sideToBoardIdx][3];
-			usageShdw[sel].u[slotAssignment].id[3] = ledBoardIds[sideToBoardIdx][4];
-			usageShdw[sel].u[slotAssignment].id[4] = ledBoardIds[sideToBoardIdx][5];
-			usageShdw[sel].u[slotAssignment].id[5] = ledBoardIds[sideToBoardIdx][6];
+			strncpy((char*)&usageShdw[sel].u[slotAssignment].id[0], (char*)&ledBrd[brdIdx].id[0],6);
 			
 			usageShdw[sel].u[slotAssignment].top_botn = top_botn;
 			
 			usageShdw[sel].u[slotAssignment].slotFilled = 1;
 
-			usageIdx[sel][i] = slotAssignment++; //TODO: Is this really what I meant to do?
+			usageIdx[sel][i] = slotAssignment++;
 		}
 	}
-	
 }
 
 unsigned char calc_usage_csum(unsigned char sel)
@@ -1033,6 +1018,7 @@ unsigned char calc_usage_csum(unsigned char sel)
 		
 		csum += usageShdw[sel].u[i].maxUsageReached;
 		csum += usageShdw[sel].u[i].top_botn;
+		csum += usageShdw[sel].u[i].slotFilled;
 	}
 	
 	return csum;
@@ -1101,7 +1087,7 @@ void increment_ledBoard_usage_min(void)
 	
 	for (unsigned char i=0; i<NUM_SHELVES; i++) //check every active shelf
 	{
-		if (shelfActive[i] == SHELF_ACTIVE)
+		if (shelf[i].active == SHELF_ACTIVE)
 		{
 			switch (i)
 			{
@@ -1179,6 +1165,91 @@ void increment_ledBoard_usage_min(void)
 }
 
 
+void init_shelf_n_ledBrd_structs(void);
+void init_shelf_n_ledBrd_structs(void)
+{
+	
+	for (int i=0; i<NUM_SHELVES; i++)
+	{
+		shelf[i].active = 0;
+		shelf[i].devicesPresent = 0;
+	}
+	
+	shelf[0].tLedIdx = 0;
+	shelf[0].bLedIdx = 1;
+	shelf[1].tLedIdx = 1;
+	shelf[1].bLedIdx = 2;
+	shelf[2].tLedIdx = 2;
+	shelf[2].bLedIdx = 3;
+	shelf[3].tLedIdx = 3;
+	shelf[3].bLedIdx = 4;
+	
+	for (int i=0; i<NUM_LED_BOARDS; i++)
+	{
+		ledBrd[i].present = 0;
+	}
+	
+	ledBrd[0].uSideIdx = 0xFF;
+	ledBrd[0].lSideIdx = 0;
+	ledBrd[1].uSideIdx = 1;
+	ledBrd[1].lSideIdx = 2;
+	ledBrd[2].uSideIdx = 3;
+	ledBrd[2].lSideIdx = 4;
+	ledBrd[3].uSideIdx = 5;
+	ledBrd[3].lSideIdx = 6;
+	ledBrd[4].uSideIdx = 7;
+	ledBrd[4].lSideIdx = 0xFF;
+
+	ledBrd[0].uSideShelfIdx = 0xFF;
+	ledBrd[1].uSideShelfIdx = 0;
+	ledBrd[2].uSideShelfIdx = 1;
+	ledBrd[3].uSideShelfIdx = 2;
+	ledBrd[4].uSideShelfIdx = 3;
+ 
+	ledBrd[0].lSideShelfIdx = 0;
+	ledBrd[1].lSideShelfIdx = 1;
+	ledBrd[2].lSideShelfIdx = 2;
+	ledBrd[3].lSideShelfIdx = 3;
+	ledBrd[4].lSideShelfIdx = 0xFF;
+	
+
+	for (int i=0; i<NUM_LED_BOARD_SIDES; i++)
+	{
+		ledBrdSide[i].maxUsageReached = 0;
+		ledBrdSide[i].sanitizeMinutes = 0;
+		ledBrdSide[i].ushdwIdx = 0xFF;
+	}
+	
+	ledBrdSide[0].boardIdx = 0;
+	ledBrdSide[1].boardIdx = 1;
+	ledBrdSide[2].boardIdx = 1;
+	ledBrdSide[3].boardIdx = 2;
+	ledBrdSide[4].boardIdx = 2;
+	ledBrdSide[5].boardIdx = 3;
+	ledBrdSide[6].boardIdx = 3;
+	ledBrdSide[7].boardIdx = 4;
+	
+
+	ledBrdSide[0].shelfIdx = 0;
+	ledBrdSide[1].shelfIdx = 0;
+	ledBrdSide[2].shelfIdx = 1;
+	ledBrdSide[3].shelfIdx = 1;
+	ledBrdSide[4].shelfIdx = 2;
+	ledBrdSide[5].shelfIdx = 2;
+	ledBrdSide[6].shelfIdx = 3;
+	ledBrdSide[7].shelfIdx = 3;
+
+}
+
+void load_usageIdx_to_ledBrdSide(unsigned char sel);
+void load_usageIdx_to_ledBrdSide(unsigned char sel)
+{
+	for (int i=0; i<NUM_LED_BOARD_SIDES; i++)
+	{
+		ledBrdSide[i].ushdwIdx = usageIdx[sel][i];
+	}
+}
+
 
 void init_led_board_info(void);
 void init_led_board_info(void)
@@ -1187,6 +1258,8 @@ void init_led_board_info(void)
 	unsigned int usage0cnt, usage1cnt;
 	unsigned char newer, older, previouslyOlder;
 	unsigned char good, bad, previouslyBad;
+	
+	init_shelf_n_ledBrd_structs();
 	
 	read_led_board_serial_ids();
 	usage0good = read_usage_struct(0);
@@ -1221,6 +1294,7 @@ void init_led_board_info(void)
 			chassis_error();
 		}
 		add_new_led_board_sides_to_usage(0);
+		load_usageIdx_to_ledBrdSide(0);
 		usageShdw[0].csum = calc_usage_csum(0);
 		copy_usage_to_usage(1,0);
 		write_usage_to_flash(0);
@@ -1249,6 +1323,7 @@ void init_led_board_info(void)
 		}
 
 		add_new_led_board_sides_to_usage(newer);
+		load_usageIdx_to_ledBrdSide(newer);
 		usageShdw[newer].csum = calc_usage_csum(newer);
 		copy_usage_to_usage(older, newer);
 		previouslyOlder = older;
@@ -1280,6 +1355,7 @@ void init_led_board_info(void)
 		}
 		
 		add_new_led_board_sides_to_usage(good);
+		load_usageIdx_to_ledBrdSide(good);
 		usageShdw[good].csum = calc_usage_csum(good);
 		copy_usage_to_usage(bad, good);
 		previouslyBad = bad;
@@ -1399,7 +1475,7 @@ int main(void)
 				displayIdx = 0xFF; //this means not assigned yet
 				sanitizeMinutes = 0;
 				for (int i = 0; i<NUM_SHELVES; i++) {
-					if (shelfActive[i] == SHELF_ACTIVE) {
+					if (shelf[i].active == SHELF_ACTIVE) {
 						tmpSanitizeMinutes = calc_sanitize_time(i);
 						
 						if (tmpSanitizeMinutes > sanitizeMinutes)
@@ -1464,7 +1540,7 @@ int main(void)
 							displayIdx = 0; //12apr15 wrap around
 						}
 						
-						if (shelfActive[displayIdx])
+						if (shelf[displayIdx].active)
 						{
 							break; //this shelf is active, we don't need to look for another one
 						}
