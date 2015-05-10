@@ -855,11 +855,19 @@ static SERIAL_ID_AND_USAGE serialIdAndUsageFlashOne[NUM_SETS_LED_BOARD_SIDES * N
 unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char top_botn);
 unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char top_botn)
 {
+	unsigned char brdIdx;
+	
 	for (unsigned char i=0; i<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); i++)
 	{
-		if ((strstr((char*)idPtr, (char*)(usageShdw[sel].u[i].id))) && (usageShdw[sel].u[i].top_botn == top_botn))
+		
+		brdIdx = ledBrdSide[i].boardIdx;
+		
+		if (ledBrd[brdIdx].present)
 		{
-			return (i); //Found a match!
+			if ((strstr((char*)idPtr, (char*)(usageShdw[sel].u[i].id))) && (usageShdw[sel].u[i].top_botn == top_botn))
+			{
+				return (i); //Found a match!
+			}
 		}
 	}
 	
@@ -1238,6 +1246,14 @@ void init_shelf_n_ledBrd_structs(void)
 	ledBrdSide[5].shelfIdx = 2;
 	ledBrdSide[6].shelfIdx = 3;
 	ledBrdSide[7].shelfIdx = 3;
+	
+	for (int i=0; i<2; i++)
+	{
+		for (int j=0; j<NUM_LED_BOARD_SIDES; j++)
+		{
+			usageIdx[i][j] = NO_LED_BOARD_PRESENT;
+		}
+	}
 
 }
 
