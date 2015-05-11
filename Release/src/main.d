@@ -67,17 +67,19 @@ src/main.d src/main.o src/main.o: ../src/main.c \
  ../src/ASF/avr32/drivers/pm/pm_uc3c.h \
  ../src/ASF/avr32/drivers/scif/scif_uc3c.h \
  ../src/ASF/avr32/drivers/flashc/flashc.h \
- ../src/ASF/avr32/drivers/gpio/gpio.h ../src/ss_print_funcs.h \
+ ../src/ASF/avr32/drivers/gpio/gpio.h ../src/ec_print_funcs.h \
  ../src/ASF/common/boards/board.h \
  ../src/ASF/avr32/boards/uc3c_ek/uc3c_ek.h \
  ../src/ASF/avr32/boards/uc3c_ek/led.h \
  ../src/ASF/avr32/drivers/adcifa/adcifa.h \
  ../src/ASF/avr32/drivers/twim/twim.h \
  ../src/ASF/avr32/utils/status_codes.h ../src/config/conf_twim.h \
- ../src/config/conf_pca9952.h ../src/pca9952.h ../src/conf_sealshield.h \
+ ../src/config/conf_pca9952.h ../src/pca9952.h ../src/conf_eclave.h \
  ../src/config/conf_clock.h \
  ../src/ASF/avr32/drivers/cpu/cycle_counter/cycle_counter.h \
- ../src/ASF/avr32/drivers/usart/usart.h ../src/serial_id_ds2411.h
+ ../src/ASF/avr32/drivers/usart/usart.h ../src/serial_id_ds2411.h \
+ c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32-gnu-toolchain\bin\../lib/gcc/avr32/4.4.7/../../../../avr32/include/string.h \
+ c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32-gnu-toolchain\bin\../lib/gcc/avr32/4.4.7/../../../../avr32/include/sys/string.h
 
 ../src/ASF/avr32/utils/compiler.h:
 
@@ -217,7 +219,7 @@ c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32
 
 ../src/ASF/avr32/drivers/gpio/gpio.h:
 
-../src/ss_print_funcs.h:
+../src/ec_print_funcs.h:
 
 ../src/ASF/common/boards/board.h:
 
@@ -237,7 +239,7 @@ c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32
 
 ../src/pca9952.h:
 
-../src/conf_sealshield.h:
+../src/conf_eclave.h:
 
 ../src/config/conf_clock.h:
 
@@ -246,3 +248,7 @@ c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32
 ../src/ASF/avr32/drivers/usart/usart.h:
 
 ../src/serial_id_ds2411.h:
+
+c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32-gnu-toolchain\bin\../lib/gcc/avr32/4.4.7/../../../../avr32/include/string.h:
+
+c:\program\ files\ (x86)\atmel\atmel\ toolchain\avr32\ gcc\native\3.4.1067\avr32-gnu-toolchain\bin\../lib/gcc/avr32/4.4.7/../../../../avr32/include/sys/string.h:

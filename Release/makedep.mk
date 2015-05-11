@@ -4,7 +4,7 @@
 
 src\serial_id_ds2411.c
 
-src\ss_print_funcs.c
+src\ec_print_funcs.c
 
 src\ASF\avr32\boards\uc3c_ek\led.c
 

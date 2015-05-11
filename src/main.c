@@ -393,7 +393,7 @@ unsigned char check_led_brd_side_lifetime(unsigned char sideIdx)
 	 *	refurbished. 
 	 */
 	
-	idx = usageIdx[0][sideIdx];
+	idx = ledBrdSide[sideIdx].ushdwIdx;
 	hours = (usageShdw[0].u[idx].hrs_thous * 1000) +
 		(usageShdw[0].u[idx].hrs_huns * 100) +
 		(usageShdw[0].u[idx].hrs_tens * 10) +
@@ -421,9 +421,16 @@ unsigned char check_led_brd_side_lifetime(unsigned char sideIdx)
 void check_led_brd_side_lifetimes(void);
 void check_led_brd_side_lifetimes(void)
 {
+	unsigned char brdIdx;
+	
 	for (int i=0; i<NUM_LED_BOARD_SIDES; i++)
 	{
-		ledBrdSide[i].maxUsageReached = !check_led_brd_side_lifetime(i);
+		brdIdx = ledBrdSide[i].boardIdx;
+		
+		if (ledBrd[brdIdx].present)
+		{
+			ledBrdSide[i].maxUsageReached = !check_led_brd_side_lifetime(i);	
+		}	
 	}
 }
 
@@ -542,7 +549,34 @@ void check_shelves_for_devices(void)
 {
 	for (int i=0; i<NUM_SHELVES; i++)
 	{
-		shelf[i].devicesPresent = check_shelf_for_devices(i);
+		switch (i)
+		{
+			case 0:
+				if (ledBrd[0].present && ledBrd[1].present)
+				{
+					shelf[i].devicesPresent = check_shelf_for_devices(i);	
+				}
+				break;
+			case 1:
+				if (ledBrd[1].present && ledBrd[2].present)
+				{
+					shelf[i].devicesPresent = check_shelf_for_devices(i);	
+				}
+				break;
+			case 2:
+				if (ledBrd[2].present && ledBrd[3].present)
+				{
+					shelf[i].devicesPresent = check_shelf_for_devices(i);	
+				}
+				break;
+			case 3:
+				if (ledBrd[3].present && ledBrd[4].present)
+				{
+					shelf[i].devicesPresent = check_shelf_for_devices(i);	
+				}
+				break;
+		}
+		
 	}
 }
 
@@ -791,8 +825,8 @@ enum {
 	STATE_SHUTDOWN_PROCESSES
 };
 
-unsigned long calc_sanitize_time(unsigned char shelfIdx);
-unsigned long calc_sanitize_time(unsigned char shelfIdx)
+unsigned char calc_sanitize_time(unsigned char shelfIdx);
+unsigned char calc_sanitize_time(unsigned char shelfIdx)
 {
 	unsigned char uSideMinutes, lSideMinutes, minutes, boardIdx, sideIdx;
 	
@@ -807,7 +841,7 @@ unsigned long calc_sanitize_time(unsigned char shelfIdx)
 
 	minutes = (uSideMinutes >= lSideMinutes) ? uSideMinutes : lSideMinutes; //choose the sanitize time for the more worn-out leds
 	
-	return (minutes * 60 * cpu_ms_2_cy(1000, 80000000));
+	return (minutes);
 	
 }
 
