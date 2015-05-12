@@ -110,6 +110,7 @@ typedef struct {
 	unsigned char tLedIdx;
 	unsigned char bLedIdx;
 	unsigned char devicesPresent;
+	unsigned char present;
 
 } SHELF;
 
@@ -354,6 +355,23 @@ void read_led_board_serial_ids(void)
 	ledBrd[3].present = !OWTouchReset(3);
 	ledBrd[4].present = !OWTouchReset(4);
 	
+	if (ledBrd[0].present && ledBrd[1].present)
+	{
+		shelf[0].present = 1;
+	}
+	if (ledBrd[1].present && ledBrd[2].present)
+	{
+		shelf[1].present = 1;
+	}
+	if (ledBrd[2].present && ledBrd[3].present)
+	{
+		shelf[2].present = 1;
+	}
+	if (ledBrd[3].present && ledBrd[4].present)
+	{
+		shelf[3].present = 1;
+	}
+	
 	for (int i=0; i<NUM_LED_BOARDS; i++)
 	{
 		if (ledBrd[i].present)
@@ -370,6 +388,23 @@ void read_led_board_serial_ids(void)
 			ledBrd[i].idcsum = OWReadByte(i);
 		}
 	}
+	
+	//DEBUG until we fix the reading of the serial chip ID 11may15
+	
+	ledBrd[1].id[0] = 0x01;
+	ledBrd[1].id[1] = 0x23;
+	ledBrd[1].id[2] = 0x45;
+	ledBrd[1].id[3] = 0x67;
+	ledBrd[1].id[4] = 0x89;
+	ledBrd[1].id[5] = 0xab;
+
+	ledBrd[2].id[0] = 0xab;
+	ledBrd[2].id[1] = 0x89;
+	ledBrd[2].id[2] = 0x67;
+	ledBrd[2].id[3] = 0x45;
+	ledBrd[2].id[4] = 0x23;
+	ledBrd[2].id[5] = 0x01;
+
 }
 
 /* LEDs we are using are rated for up to 2000 hours */
@@ -549,34 +584,10 @@ void check_shelves_for_devices(void)
 {
 	for (int i=0; i<NUM_SHELVES; i++)
 	{
-		switch (i)
+		if (shelf[i].present)
 		{
-			case 0:
-				if (ledBrd[0].present && ledBrd[1].present)
-				{
-					shelf[i].devicesPresent = check_shelf_for_devices(i);	
-				}
-				break;
-			case 1:
-				if (ledBrd[1].present && ledBrd[2].present)
-				{
-					shelf[i].devicesPresent = check_shelf_for_devices(i);	
-				}
-				break;
-			case 2:
-				if (ledBrd[2].present && ledBrd[3].present)
-				{
-					shelf[i].devicesPresent = check_shelf_for_devices(i);	
-				}
-				break;
-			case 3:
-				if (ledBrd[3].present && ledBrd[4].present)
-				{
-					shelf[i].devicesPresent = check_shelf_for_devices(i);	
-				}
-				break;
+			shelf[i].devicesPresent = check_shelf_for_devices(i);	
 		}
-		
 	}
 }
 
@@ -659,8 +670,7 @@ void set_shelves_active_inactive(void)
 	}
 	
 	/* check shelf 0 */
-	if (ledBrd[0].present &&
-		ledBrd[1].present &&
+	if (shelf[0].present &&
 		shelf[0].devicesPresent && 
 		(!ledBrdSide[LED_BRD_0_BOT].maxUsageReached) &&
 		(!ledBrdSide[LED_BRD_1_TOP].maxUsageReached) )
@@ -672,8 +682,7 @@ void set_shelves_active_inactive(void)
 	
 	/* check shelf 1 */
 	
-	if (ledBrd[1].present &&
-		ledBrd[2].present &&
+	if (shelf[1].present &&
 	shelf[1].devicesPresent &&
 	(!ledBrdSide[LED_BRD_1_BOT].maxUsageReached) &&
 	(!ledBrdSide[LED_BRD_2_TOP].maxUsageReached) )
@@ -685,8 +694,7 @@ void set_shelves_active_inactive(void)
 	
 	/* check shelf 2 */
 	
-	if (ledBrd[2].present &&
-		ledBrd[3].present &&
+	if (shelf[2].present &&
 	shelf[2].devicesPresent &&
 	(!ledBrdSide[LED_BRD_2_BOT].maxUsageReached) &&
 	(!ledBrdSide[LED_BRD_3_TOP].maxUsageReached) )
@@ -698,8 +706,7 @@ void set_shelves_active_inactive(void)
 	
 	/* check shelf 3 */
 	
-	if (ledBrd[3].present &&
-		ledBrd[4].present &&
+	if (shelf[3].present &&
 	shelf[3].devicesPresent &&
 	(!ledBrdSide[LED_BRD_3_BOT].maxUsageReached) &&
 	(!ledBrdSide[LED_BRD_4_TOP].maxUsageReached) )
@@ -886,39 +893,74 @@ static SERIAL_ID_AND_USAGE serialIdAndUsageFlashOne[NUM_SETS_LED_BOARD_SIDES * N
 #endif
 ;
 
+#define STRINGS_MATCH 0
+
 unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char top_botn);
 unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char top_botn)
 {
-	unsigned char brdIdx;
+	unsigned char tmpBoardId[6];
 	
 	for (unsigned char i=0; i<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); i++)
 	{
 		
-		brdIdx = ledBrdSide[i].boardIdx;
-		
-		if (ledBrd[brdIdx].present)
+#if 0 //This just isn't working the way it should, maybe trying to do too much in one line for this compiler		
+		if ((strncmp((char*)idPtr, (char*)(&usageShdw[sel].u[i].id[0]),6)) && (usageShdw[sel].u[i].top_botn == top_botn) == STRINGS_MATCH)
 		{
-			if ((strstr((char*)idPtr, (char*)(usageShdw[sel].u[i].id))) && (usageShdw[sel].u[i].top_botn == top_botn))
-			{
-				return (i); //Found a match!
-			}
+			return (i); //Found a match!
 		}
-	}
-	
-	return NO_LED_BOARD_PRESENT;
+#endif
+		if (usageShdw[sel].u[i].slotFilled)
+		{
+			tmpBoardId[0] = *(idPtr+0);
+			tmpBoardId[1] = *(idPtr+1);
+			tmpBoardId[2] = *(idPtr+2);
+			tmpBoardId[3] = *(idPtr+3);
+			tmpBoardId[4] = *(idPtr+4);
+			tmpBoardId[5] = *(idPtr+5);
+			
+		
+			if (tmpBoardId[0] == usageShdw[sel].u[i].id[0]) {
+				if (tmpBoardId[1] == usageShdw[sel].u[i].id[1]) {
+					if (tmpBoardId[2] == usageShdw[sel].u[i].id[2]) {
+						if (tmpBoardId[3] == usageShdw[sel].u[i].id[3]) {
+							if (tmpBoardId[4] == usageShdw[sel].u[i].id[4]) {
+								if (tmpBoardId[5] == usageShdw[sel].u[i].id[5]) {
+									if (top_botn == usageShdw[sel].u[i].top_botn)
+									{
+										return (i); //found a match!
 
+									} //check top_botn match
+								} //tmpBoardId[5]
+							} //tmpBoardId[4]
+						} //tmpBoardId[3]
+					} //tmpBoardId[2]
+				} //tmpBoardId[1]
+			} //tmpBoardId[0]
+		} //if slotFilled (don't check against slots that haven't been assigned
+	} //for each slot in usageShdw[sel]
+	
+	return NO_LED_BOARD_PRESENT; //no match found
 }
 
 void load_usage_indeces(unsigned char sel)
 {
-	usageIdx[sel][0] = usage_idx(sel, &ledBrd[0].id[0], BOTTOM);
-	usageIdx[sel][1] = usage_idx(sel, &ledBrd[1].id[0], TOP);
-	usageIdx[sel][2] = usage_idx(sel, &ledBrd[1].id[0], BOTTOM);
-	usageIdx[sel][3] = usage_idx(sel, &ledBrd[2].id[0], TOP);
-	usageIdx[sel][4] = usage_idx(sel, &ledBrd[2].id[0], BOTTOM);
-	usageIdx[sel][5] = usage_idx(sel, &ledBrd[3].id[0], TOP);
-	usageIdx[sel][6] = usage_idx(sel, &ledBrd[3].id[0], BOTTOM);
-	usageIdx[sel][7] = usage_idx(sel, &ledBrd[4].id[0], TOP);
+	unsigned char top_botn, brdIdx;
+		
+	for (int i=0; i<NUM_LED_BOARD_SIDES; i++)
+	{
+		brdIdx = ledBrdSide[i].boardIdx;
+		
+		if (ledBrd[brdIdx].present)
+		{
+			top_botn = i%2;
+			
+			usageIdx[sel][i] = usage_idx(sel, &ledBrd[brdIdx].id[0], top_botn); //TODO: should change this nomenclature to upper/lower, we are talking about board sides here, not which board in the shelf, be consistent
+		}
+		else
+		{
+			usageIdx[sel][i] = NO_LED_BOARD_PRESENT;
+		}
+	}
 }
 
 enum{CHECKSUM_INVALID, CHECKSUM_VALID};
@@ -1122,83 +1164,70 @@ void increment_ledBoard_usage_min(void);
 void increment_ledBoard_usage_min(void)
 {
 	SERIAL_ID_AND_USAGE *tmp;
-	unsigned char upperLEDboardIdx;
-	unsigned char lowerLEDboardIdx;
-	unsigned char upperLEDboardMinuteUsageIdx;
-	unsigned char lowerLEDboardMinuteUsageIdx;
+	unsigned char topLEDboardLowerSideIdx;
+	unsigned char bottomLEDboardUpperSideIdx;
+	unsigned char topUIdx;
+	unsigned char bottomUIdx;
 	
 	for (unsigned char i=0; i<NUM_SHELVES; i++) //check every active shelf
 	{
 		if (shelf[i].active == SHELF_ACTIVE)
 		{
-			switch (i)
-			{
-				case 0:
-					upperLEDboardIdx = 0;
-					lowerLEDboardIdx = 1;
-					break;
-				case 1:
-					upperLEDboardIdx = 1;
-					lowerLEDboardIdx = 2;
-					break;
-				case 2:
-					upperLEDboardIdx = 2;
-					lowerLEDboardIdx = 3;
-					break;
-				case 3:
-					upperLEDboardIdx = 3;
-					lowerLEDboardIdx = 4;
-					break;
-			}
+			topLEDboardLowerSideIdx = ledBrd[shelf[i].tLedIdx].lSideIdx;
+			bottomLEDboardUpperSideIdx = ledBrd[shelf[i].bLedIdx].uSideIdx;
 		
-			upperLEDboardMinuteUsageIdx = usageIdx[0][upperLEDboardIdx];
-			lowerLEDboardMinuteUsageIdx = usageIdx[0][lowerLEDboardIdx];
+			topUIdx = ledBrdSide[topLEDboardLowerSideIdx].ushdwIdx;
+			bottomUIdx = ledBrdSide[bottomLEDboardUpperSideIdx].ushdwIdx;
 		
-			for (unsigned char j=0; j<2; j++)
+			for (unsigned char j=0; j<2; j++) //for each copy of usageShdw[] (update both copies every time)
 			{
-				switch (j)
+				for (unsigned char k=0; k<2; k++) //for each board side in the shelf
 				{
-					case 0:
-						tmp = &usageShdw[0].u[upperLEDboardMinuteUsageIdx];
-						break;
-					case 1:
-						tmp = &usageShdw[0].u[lowerLEDboardMinuteUsageIdx];
-						break;
-				}
-			
-
-				if (++(tmp->min_ones) > 9)
-				{
-					tmp->min_ones = 0;
-				
-					if (++(tmp->min_tens) > 5)
+					switch (k)
 					{
-						tmp->min_tens = 0;
-					
-						if (++(tmp->hrs_ones) > 9)
-						{
-							tmp->hrs_ones = 0;
-						
-							if (++(tmp->hrs_tens) > 9)
-							{
-								tmp->hrs_tens = 0;
-							
-								if (++(tmp->hrs_huns) > 9)
-								{
-									tmp->hrs_huns = 0;
-								
-									if (++(tmp->hrs_thous) > 1)
-									{
-										tmp->maxUsageReached = 1; //And...we're done. Reached 2000 hours.
-									}
-								}
-							}
-						}
+						case 0:
+							tmp = &usageShdw[j].u[topUIdx];
+							break;
+						case 1:
+							tmp = &usageShdw[j].u[bottomUIdx];
+							break;
 					}
-				}
-			}
-		}
-	}
+
+					if (++(tmp->min_ones) > 9)
+					{
+						tmp->min_ones = 0;
+				
+						if (++(tmp->min_tens) > 5)
+						{
+							tmp->min_tens = 0;
+					
+							if (++(tmp->hrs_ones) > 9)
+							{
+								tmp->hrs_ones = 0;
+						
+								if (++(tmp->hrs_tens) > 9)
+								{
+									tmp->hrs_tens = 0;
+							
+									if (++(tmp->hrs_huns) > 9)
+									{
+										tmp->hrs_huns = 0;
+								
+										if (++(tmp->hrs_thous) > 1)
+										{
+											tmp->maxUsageReached = 1; //And...we're done. Reached 2000 hours.
+										} //hrs_thous
+									} //hrs_huns
+								} //hrs_tens 
+							} //hrs_ones
+						} //min_tens
+					} //min_ones
+				} //for each board side in the shelf (k)
+			} //for each copy of usageShdw
+		} //if (shelf[i].active)
+	} //for (i=0; i<NUM_SHELVES; i++)
+	
+	usageShdw[pingPong].csum = calc_usage_csum(pingPong);
 			
 	write_usage_to_flash(pingPong);
 	
@@ -1215,6 +1244,7 @@ void init_shelf_n_ledBrd_structs(void)
 	{
 		shelf[i].active = 0;
 		shelf[i].devicesPresent = 0;
+		shelf[i].present = 0;
 	}
 	
 	shelf[0].tLedIdx = 0;
@@ -1545,9 +1575,14 @@ int main(void)
 				displayTimerSeconds = cpu_ms_2_cy(8000, 8000000); //8 seconds per "shelf" display is enough time for the text to scroll twice
 				cpu_set_timeout(displayTimerSeconds, &displayTimer);
 				
+#if 0 //DEBUG: set this to seconds not minutes so we can debug this logic faster 11may15				
 				cpu_set_timeout((sanitizeMinutes * 60 * cpu_ms_2_cy(1000, 8000000)), &sanitizeTimer);
+#endif
+				cpu_set_timeout((sanitizeMinutes * cpu_ms_2_cy(1000, 8000000)), &sanitizeTimer); //DEBUG take this out when done debugging logic, put it back to minutes 11may15
+
 				
-				cpu_set_timeout((60 * cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics
+//DEBUG 11may15 do this once per second for debug				cpu_set_timeout((60 * cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics
+				cpu_set_timeout((cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics DEBUG 11may15
 
 				display_text(IDX_CLEAR);
 				cpu_delay_ms(500, 8000000); //half second TODO: figure out why this is here and get rid of it, don't like to just hang for no reason, especially when we need to be monitoring the door latch
@@ -1612,7 +1647,8 @@ int main(void)
 					
 					increment_ledBoard_usage_min(); //increments usage minutes for active shelves only
 					
-					cpu_set_timeout(60000, &oneMinuteTimer); //one minute for the usage statistics
+//DEBUG 11may15 set to one second for debug					cpu_set_timeout(cpu_ms_2_cy(60000, 8000000), &oneMinuteTimer); //one minute for the usage statistics
+					cpu_set_timeout((cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics DEBUG 11may15 one second instead of one minute
 				}
 
 				/*
@@ -1626,13 +1662,18 @@ int main(void)
 					}
 					cpu_stop_timeout(&sanitizeTimer);
 					print_ecdbg("Shelf clean\r\n");
+					electroclaveState = STATE_START_CLEAN;
 				}
 				break;
 				
 			case STATE_START_CLEAN:
 				display_text(IDX_CLEAN);
 				electroclaveState = STATE_CLEAN;
-				cpu_set_timeout((20 * 60 * cpu_ms_2_cy(1000, 80000000)), &cleanTimer); //TODO: this time period will be parameterized from the technician UART interface
+#if 0 //DEBUG do this in seconds to debug logic 11may15				
+				cpu_set_timeout((20 * 60 * cpu_ms_2_cy(1000, 8000000)), &cleanTimer); //TODO: this time period will be parameterized from the technician UART interface
+#endif
+				cpu_set_timeout((20 * cpu_ms_2_cy(1000, 8000000)), &cleanTimer); //DEBUG 11may15 
+
 				break;	
 				
 			case STATE_CLEAN:
