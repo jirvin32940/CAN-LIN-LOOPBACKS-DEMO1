@@ -347,7 +347,7 @@ void read_led_board_serial_ids(void)
 	 * Check for LED board presence by issuing a reset to the serial ID chip and checking for a response.
 	 */
 	
-	SetSpeed(1); //1==standard speed, not overdrive
+	SetSpeed(1); //1==standard speed, not overdrive 
 	
 	ledBrd[0].present = !OWTouchReset(0);
 	ledBrd[1].present = !OWTouchReset(1);
@@ -372,6 +372,9 @@ void read_led_board_serial_ids(void)
 		shelf[3].present = 1;
 	}
 	
+
+//for (;;) //DEBUG 12may15
+//{
 	for (int i=0; i<NUM_LED_BOARDS; i++)
 	{
 		if (ledBrd[i].present)
@@ -388,6 +391,7 @@ void read_led_board_serial_ids(void)
 			ledBrd[i].idcsum = OWReadByte(i);
 		}
 	}
+//}//DEBUG 12may15
 	
 	//DEBUG until we fix the reading of the serial chip ID 11may15
 	
@@ -1121,7 +1125,7 @@ void write_usage_to_flash(unsigned char sel)
 	}
 	else
 	{
-		flashc_memcpy(serialIdAndUsageFlashOne, &usageShdw[0], sizeof(usageShdw[0]),true);
+		flashc_memcpy(serialIdAndUsageFlashOne, &usageShdw[1], sizeof(usageShdw[1]),true);
 	}
 }
 
@@ -1552,6 +1556,9 @@ int main(void)
 				break;
 				
 			case STATE_START_SANITIZE:
+				display_text(IDX_CLEAR);
+				cpu_delay_ms(500, 8000000); //half second TODO: figure out why this is here and get rid of it, don't like to just hang for no reason, especially when we need to be monitoring the door latch
+				
 				displayIdx = 0xFF; //this means not assigned yet
 				sanitizeMinutes = 0;
 				for (int i = 0; i<NUM_SHELVES; i++) {
@@ -1584,9 +1591,6 @@ int main(void)
 //DEBUG 11may15 do this once per second for debug				cpu_set_timeout((60 * cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics
 				cpu_set_timeout((cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics DEBUG 11may15
 
-				display_text(IDX_CLEAR);
-				cpu_delay_ms(500, 8000000); //half second TODO: figure out why this is here and get rid of it, don't like to just hang for no reason, especially when we need to be monitoring the door latch
-				
 				electroclaveState = STATE_SANITIZE;
 				
 				break;
@@ -1650,7 +1654,6 @@ int main(void)
 //DEBUG 11may15 set to one second for debug					cpu_set_timeout(cpu_ms_2_cy(60000, 8000000), &oneMinuteTimer); //one minute for the usage statistics
 					cpu_set_timeout((cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics DEBUG 11may15 one second instead of one minute
 				}
-
 				/*
     			 * Manage the sanitizer timer
 				 */

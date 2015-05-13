@@ -125,11 +125,11 @@ int OWTouchReset(unsigned char idx)
 
 	cpu_delay_us(A, 8000000);
 	drive_DQ_low(idx);
-	cpu_delay_us(H, 8000000);
+	cpu_delay_us(H, 8000000);	//tRSTL (reset low) 480-640us
 	release_the_bus(idx);
-	cpu_delay_us(I, 8000000);
+	cpu_delay_us(I, 8000000);	//tMSP (presence detect sample) 60-75us
 	result = sample_line(idx);
-	cpu_delay_us(J, 8000000); // Complete the reset sequence recovery
+	cpu_delay_us(J, 8000000); // Complete the reset sequence recovery 5-??us (no max?)
 	return result; // Return sample presence pulse result
 }
 
@@ -143,17 +143,17 @@ void OWWriteBit(unsigned char idx, int bit)
 	{
 		// Write '1' bit
 		drive_DQ_low(idx);
-		cpu_delay_us(A, 8000000);
+		cpu_delay_us(A, 8000000);	//tW1L 5-15us
 		release_the_bus(idx);
-		cpu_delay_us(B, 8000000); // Complete the time slot and 10us recovery
+		cpu_delay_us(B, 8000000);	// Complete the time slot and 10us recovery tSLOT 65-??us (no max)
 	}
 	else
 	{
 		// Write '0' bit
 		drive_DQ_low(idx);
-		cpu_delay_us(C, 8000000);
+		cpu_delay_us(C, 8000000);	//tW0L 60-120us
 		release_the_bus(idx);
-		cpu_delay_us(D, 8000000);
+		cpu_delay_us(D, 8000000);	//tREC 5-??us
 	}
 }
 
@@ -166,11 +166,11 @@ int OWReadBit(unsigned char idx)
 	int result;
 
 	drive_DQ_low(idx);
-	cpu_delay_us(A, 8000000);
+	cpu_delay_us(A, 8000000);	//tRL 5-15us
 	release_the_bus(idx);
-	cpu_delay_us(E, 8000000);
+	cpu_delay_us(E, 8000000);	//tMSR 5-15us
 	result = sample_line(idx);
-	cpu_delay_us(F, 8000000); // Complete the time slot and 10us recovery
+	cpu_delay_us(F, 8000000); // Complete the time slot and 10us recovery tREC 5+us
 
 	return result;
 }
