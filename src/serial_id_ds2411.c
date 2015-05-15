@@ -38,38 +38,59 @@ void drive_DQ_low(unsigned char idx);
 void drive_DQ_low(unsigned char idx)
 {
 	unsigned char ioPin;
+	int32_t ioFlags;
 	
 	ioPin = io_pin(idx);
 	
+	ioFlags = (GPIO_DIR_OUTPUT); //14may15 experiment
+	gpio_configure_pin(ioPin, ioFlags); //14may15 experiment
+
 	gpio_set_pin_low(ioPin);
+
 }
 
 void release_the_bus(unsigned char idx);
 void release_the_bus(unsigned char idx)
 {
 	unsigned char ioPin;
+	int32_t ioFlags;
 	
 	ioPin = io_pin(idx);
 	
-	gpio_set_pin_high(ioPin);
+//14may15 experiment	gpio_set_pin_high(ioPin);
 	
+	ioFlags = (GPIO_DIR_INPUT); //14may15 experiment
+	gpio_configure_pin(ioPin, ioFlags); //14may15 experiment
+
+}
+
+void gpio_input(unsigned char idx) //14may15 experiment
+{
+	uint32_t ioFlags;
+	unsigned char ioPin;
+		
+	ioPin = io_pin(idx);
+		
+	ioFlags = (GPIO_DIR_INPUT);
+	gpio_configure_pin(ioPin, ioFlags);
+
 }
 
 unsigned char sample_line(unsigned char idx);
 unsigned char sample_line(unsigned char idx)
 {
-		uint32_t ioFlags;
+//14may15 experiment		uint32_t ioFlags;
 		unsigned char retVal, ioPin;
 		
 		ioPin = io_pin(idx);
 		
-		ioFlags = (GPIO_DIR_INPUT);
-		gpio_configure_pin(ioPin, ioFlags);
+//14may15 experiment		ioFlags = (GPIO_DIR_INPUT);
+//14may15 experiment		gpio_configure_pin(ioPin, ioFlags);
 
 		retVal = gpio_get_pin_value(ioPin);
 
-		ioFlags = (GPIO_DIR_OUTPUT);
-		gpio_configure_pin(ioPin, ioFlags);
+//14may15 experiment		ioFlags = (GPIO_DIR_OUTPUT);
+//14may15 experiment		gpio_configure_pin(ioPin, ioFlags);
 
 		return retVal;
 }
@@ -87,11 +108,14 @@ void SetSpeed(int standard)
 	if (standard)
 	{
 		// Standard Speed
-		A = 6; //us
+//14may15 we can't seem to control this tightly		A = 6; //us
+		A = 1; //should be 6 14may15
 		B = 64;
 		C = 60;
-		D = 10;
-		E = 9;
+//14may15 we can't seem to control this tightly		D = 10;
+//14may15 we can't seem to control this tightly		E = 9;
+		D = 1; //should be 10 14may15
+		E = 3; //should be 9 14may15
 		F = 55;
 		G = 0;
 		H = 480;
@@ -127,10 +151,36 @@ int OWTouchReset(unsigned char idx)
 	drive_DQ_low(idx);
 	cpu_delay_us(H, 8000000);	//tRSTL (reset low) 480-640us
 	release_the_bus(idx);
+	
+	gpio_input(idx); //14may15 experiment
+
+	
 	cpu_delay_us(I, 8000000);	//tMSP (presence detect sample) 60-75us
 	result = sample_line(idx);
+	
+	gpio_input(idx); //14may15 experiement
+
 	cpu_delay_us(J, 8000000); // Complete the reset sequence recovery 5-??us (no max?)
 	return result; // Return sample presence pulse result
+}
+
+
+void drive_DQ_low_and_release_the_bus(unsigned char idx)
+{
+	unsigned char ioPin;
+	int32_t ioFlagsOutput, ioFlagsInput;
+	
+	ioPin = io_pin(idx);
+	
+	ioFlagsInput = (GPIO_DIR_INPUT);
+	ioFlagsOutput = (GPIO_DIR_OUTPUT); //14may15 experiment
+
+	gpio_configure_pin(ioPin, ioFlagsOutput); //14may15 experiment
+
+	gpio_set_pin_low(ioPin);
+
+	gpio_configure_pin(ioPin, ioFlagsInput); //14may15 experiment
+	
 }
 
 //-----------------------------------------------------------------------------
@@ -142,9 +192,12 @@ void OWWriteBit(unsigned char idx, int bit)
 	if (bit)
 	{
 		// Write '1' bit
+		drive_DQ_low_and_release_the_bus(idx);
+#if 0
 		drive_DQ_low(idx);
-		cpu_delay_us(A, 8000000);	//tW1L 5-15us
+//14may15 take this out entirely, we can't seem to control this precisely enough		cpu_delay_us(A, 8000000);	//tW1L 5-15us
 		release_the_bus(idx);
+#endif
 		cpu_delay_us(B, 8000000);	// Complete the time slot and 10us recovery tSLOT 65-??us (no max)
 	}
 	else
@@ -165,10 +218,14 @@ int OWReadBit(unsigned char idx)
 {
 	int result;
 
+#if 0
 	drive_DQ_low(idx);
-	cpu_delay_us(A, 8000000);	//tRL 5-15us
+//14may15 take this out entirely, we can't seem to control this precisely enough	cpu_delay_us(A, 8000000);	//tRL 5-15us
 	release_the_bus(idx);
-	cpu_delay_us(E, 8000000);	//tMSR 5-15us
+#endif
+	drive_DQ_low_and_release_the_bus(idx);
+	
+//14may15 take this out, too tight	cpu_delay_us(E, 8000000);	//tMSR 5-15us
 	result = sample_line(idx);
 	cpu_delay_us(F, 8000000); // Complete the time slot and 10us recovery tREC 5+us
 

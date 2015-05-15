@@ -19,6 +19,7 @@ void SetSpeed(int standard);
 int OWTouchReset(unsigned char idx);
 void OWWriteByte(unsigned char idx, int data);
 int OWReadByte(unsigned char idx);
+void gpio_input(unsigned char idx);
 
 
 

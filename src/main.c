@@ -350,6 +350,20 @@ void read_led_board_serial_ids(void)
 	SetSpeed(1); //1==standard speed, not overdrive 
 	
 	ledBrd[0].present = !OWTouchReset(0);
+	if (ledBrd[0].present)
+	{
+		OWWriteByte(0, 0x33); //Read ID command
+			
+		ledBrd[0].idFamily = OWReadByte(0);
+			
+		for (int j=0; j<6; j++)
+		{
+			ledBrd[0].id[j] = OWReadByte(0);
+		}
+			
+		ledBrd[0].idcsum = OWReadByte(0);
+	}
+	
 	ledBrd[1].present = !OWTouchReset(1);
 	ledBrd[2].present = !OWTouchReset(2);
 	ledBrd[3].present = !OWTouchReset(3);
@@ -379,16 +393,6 @@ void read_led_board_serial_ids(void)
 	{
 		if (ledBrd[i].present)
 		{
-			OWWriteByte(i, 0x33); //Read ID command
-			
-			ledBrd[i].idFamily = OWReadByte(i);
-			
-			for (int j=0; j<6; j++)
-			{
-				ledBrd[i].id[j] = OWReadByte(i);
-			}
-			
-			ledBrd[i].idcsum = OWReadByte(i);
 		}
 	}
 //}//DEBUG 12may15
