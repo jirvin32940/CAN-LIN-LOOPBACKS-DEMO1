@@ -75,6 +75,8 @@
 #include "serial_id_ds2411.h"	//9apr15
 #include "flashc.h"				//2may15
 #include "string.h"
+#include "sysclk.h"
+#include <pll.h>
 
 
 unsigned char read_usage_struct(unsigned char sel);
@@ -350,20 +352,6 @@ void read_led_board_serial_ids(void)
 	SetSpeed(1); //1==standard speed, not overdrive 
 	
 	ledBrd[0].present = !OWTouchReset(0);
-	if (ledBrd[0].present)
-	{
-		OWWriteByte(0, 0x33); //Read ID command
-			
-		ledBrd[0].idFamily = OWReadByte(0);
-			
-		for (int j=0; j<6; j++)
-		{
-			ledBrd[0].id[j] = OWReadByte(0);
-		}
-			
-		ledBrd[0].idcsum = OWReadByte(0);
-	}
-	
 	ledBrd[1].present = !OWTouchReset(1);
 	ledBrd[2].present = !OWTouchReset(2);
 	ledBrd[3].present = !OWTouchReset(3);
@@ -393,12 +381,22 @@ void read_led_board_serial_ids(void)
 	{
 		if (ledBrd[i].present)
 		{
+			OWWriteByte(i, 0x33); //Read ID command
+			
+			ledBrd[i].idFamily = OWReadByte(i);
+			
+			for (int j=0; j<6; j++)
+			{
+				ledBrd[i].id[j] = OWReadByte(i);
+			}
+			
+			ledBrd[i].idcsum = OWReadByte(i);
 		}
 	}
 //}//DEBUG 12may15
 	
 	//DEBUG until we fix the reading of the serial chip ID 11may15
-	
+#if 0 //we won't need this if the clock change works	
 	ledBrd[1].id[0] = 0x01;
 	ledBrd[1].id[1] = 0x23;
 	ledBrd[1].id[2] = 0x45;
@@ -412,7 +410,7 @@ void read_led_board_serial_ids(void)
 	ledBrd[2].id[3] = 0x45;
 	ledBrd[2].id[4] = 0x23;
 	ledBrd[2].id[5] = 0x01;
-
+#endif
 }
 
 /* LEDs we are using are rated for up to 2000 hours */
@@ -568,7 +566,7 @@ unsigned char check_shelf_for_devices(unsigned char shelfPosition)
 	
 	led_shelf(shelfPosition, LED_ON); //TODO: do we finish this task fast enough to not check the door latch in here? Can't have LEDs on if the door opens
 	
-	cpu_delay_ms(50, 8000000);
+	cpu_delay_ms(50, EC_CPU_CLOCK_FREQ);
 		
 	//Read bluesense for this shelf
 	bluesense = 0;
@@ -740,6 +738,9 @@ unsigned char num_active_shelves(void)
 void init_sys_clocks(void);
 void init_sys_clocks(void)
 {
+	struct pll_config pcfg;
+	
+#if 0 //experiment to see if cranking up the clock enables us to read the serial ID chip while running the debugger 16may15
 	scif_gclk_opt_t gclkOpt = {SCIF_GCCTRL_RC8M, 0,0};
 	
 	// Start the 8Mhz Oscillator
@@ -747,12 +748,28 @@ void init_sys_clocks(void)
 	// Set the main clock source as being RC8MHz.
 	pm_set_mclk_source(PM_CLK_SRC_RC8M);	
 
-
 	/* put the clock out on PC19 so we can check to make sure we set it up correctly */
 	//Note this code comes from ASF example AVR32 SCIF example 3
 	scif_start_gclk(AVR32_SCIF_GCLK_GCLK0PIN, &gclkOpt);
 	gpio_enable_module_pin(AVR32_SCIF_GCLK_0_1_PIN, AVR32_SCIF_GCLK_0_1_FUNCTION);
-	
+
+#endif  //experiment to see if cranking up the clock enables us to read the serial ID chip while running the debugger 16may15
+
+/*
+ * From CLOCK_EXAMPLE31 which changes clock sources on the fly. Trying to get a faster clock so that we can work with the serial ID chip (DS2411) which needs control to 6us. 16may15
+ */
+	osc_enable(OSC_ID_RC8M);
+	pll_config_init(&pcfg, PLL_SRC_RC8M, 1, EC_CPU_CLOCK_FREQ/OSC_RC8M_NOMINAL_HZ);
+	pll_enable(&pcfg, 0);
+	sysclk_set_prescalers(1,1,1,1);
+	pll_wait_for_lock(0);
+	sysclk_set_source(SYSCLK_SRC_PLL0);	
+
+	/* put the clock out on PC19 so we can check to make sure we set it up correctly */
+	//Note this code comes from ASF example AVR32 SCIF example 3
+//16may15 seems to cause problems, leave out for now	scif_start_gclk(AVR32_SCIF_GCLK_GCLK0PIN, &gclkOpt);
+//16may15 seems to cause problems, leave out for now	gpio_enable_module_pin(AVR32_SCIF_GCLK_0_1_PIN, AVR32_SCIF_GCLK_0_1_FUNCTION);
+
 }
 
 volatile bool input_fft_view = false;
@@ -786,7 +803,7 @@ void adc_process_init(void)
 	adcifa_get_calibration_data(adcifa, &adc_config_t);
 
 	// Configure ADCIFA core
-	adcifa_configure(adcifa, &adc_config_t, 8000000);
+	adcifa_configure(adcifa, &adc_config_t, EC_CPU_CLOCK_FREQ);
 
 }
 
@@ -1467,6 +1484,7 @@ unsigned char firstTimeThrough = 1;
 int main(void)
 {
 	static unsigned char displayIdx = 0;
+	unsigned long usec = 1000;
 	
 	// Initialize System Clock
 	init_sys_clocks();
@@ -1490,12 +1508,12 @@ int main(void)
 	irq_initialize_vectors(); //TODO: probably remove 5apr15
 
 	cpu_irq_enable();
-
+	
 	// Initialize TWI Interface
 	twi_init();
 
 	gpio_set_pin_high(ECLAVE_LED_OEn); //make sure outputs are disabled at the chip level
-	PCA9952_init();
+//16may15 DEBUG need to put this back in once we get the clock stuff worked out	PCA9952_init();
 	
 	electroclaveState = STATE_EC_IDLE;
 	
@@ -1547,9 +1565,9 @@ int main(void)
 					electroclaveState = STATE_START_SANITIZE;	
 					print_ecdbg("Start sanitizing\r\n");
 					display_text(IDX_CLEAR);
-					cpu_delay_ms(500, 8000000);
+					cpu_delay_ms(500, EC_CPU_CLOCK_FREQ);
 					display_text(IDX_CLEANING);
-					cpu_delay_ms(3000, 8000000); //give display time to update, scroll all the way across
+					cpu_delay_ms(3000, EC_CPU_CLOCK_FREQ); //give display time to update, scroll all the way across
 				}
 				else {
 					electroclaveState = STATE_START_CLEAN;
@@ -1561,7 +1579,7 @@ int main(void)
 				
 			case STATE_START_SANITIZE:
 				display_text(IDX_CLEAR);
-				cpu_delay_ms(500, 8000000); //half second TODO: figure out why this is here and get rid of it, don't like to just hang for no reason, especially when we need to be monitoring the door latch
+				cpu_delay_ms(500, EC_CPU_CLOCK_FREQ); //half second TODO: figure out why this is here and get rid of it, don't like to just hang for no reason, especially when we need to be monitoring the door latch
 				
 				displayIdx = 0xFF; //this means not assigned yet
 				sanitizeMinutes = 0;
@@ -1583,17 +1601,17 @@ int main(void)
 					}
 				}
 				
-				displayTimerSeconds = cpu_ms_2_cy(8000, 8000000); //8 seconds per "shelf" display is enough time for the text to scroll twice
+				displayTimerSeconds = cpu_ms_2_cy(8000, EC_CPU_CLOCK_FREQ); //8 seconds per "shelf" display is enough time for the text to scroll twice
 				cpu_set_timeout(displayTimerSeconds, &displayTimer);
 				
 #if 0 //DEBUG: set this to seconds not minutes so we can debug this logic faster 11may15				
-				cpu_set_timeout((sanitizeMinutes * 60 * cpu_ms_2_cy(1000, 8000000)), &sanitizeTimer);
+				cpu_set_timeout((sanitizeMinutes * 60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &sanitizeTimer);
 #endif
-				cpu_set_timeout((sanitizeMinutes * cpu_ms_2_cy(1000, 8000000)), &sanitizeTimer); //DEBUG take this out when done debugging logic, put it back to minutes 11may15
+				cpu_set_timeout((sanitizeMinutes * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &sanitizeTimer); //DEBUG take this out when done debugging logic, put it back to minutes 11may15
 
 				
-//DEBUG 11may15 do this once per second for debug				cpu_set_timeout((60 * cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics
-				cpu_set_timeout((cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics DEBUG 11may15
+//DEBUG 11may15 do this once per second for debug				cpu_set_timeout((60 * cpu_ms_2_cy(1000,EC_CPU_CLOCK_FREQ)), &oneMinuteTimer); //one minute for the usage statistics
+				cpu_set_timeout((cpu_ms_2_cy(1000,EC_CPU_CLOCK_FREQ)), &oneMinuteTimer); //one minute for the usage statistics DEBUG 11may15
 
 				electroclaveState = STATE_SANITIZE;
 				
@@ -1655,8 +1673,8 @@ int main(void)
 					
 					increment_ledBoard_usage_min(); //increments usage minutes for active shelves only
 					
-//DEBUG 11may15 set to one second for debug					cpu_set_timeout(cpu_ms_2_cy(60000, 8000000), &oneMinuteTimer); //one minute for the usage statistics
-					cpu_set_timeout((cpu_ms_2_cy(1000,8000000)), &oneMinuteTimer); //one minute for the usage statistics DEBUG 11may15 one second instead of one minute
+//DEBUG 11may15 set to one second for debug					cpu_set_timeout(cpu_ms_2_cy(60000, EC_CPU_CLOCK_FREQ), &oneMinuteTimer); //one minute for the usage statistics
+					cpu_set_timeout((cpu_ms_2_cy(1000,EC_CPU_CLOCK_FREQ)), &oneMinuteTimer); //one minute for the usage statistics DEBUG 11may15 one second instead of one minute
 				}
 				/*
     			 * Manage the sanitizer timer
@@ -1677,9 +1695,9 @@ int main(void)
 				display_text(IDX_CLEAN);
 				electroclaveState = STATE_CLEAN;
 #if 0 //DEBUG do this in seconds to debug logic 11may15				
-				cpu_set_timeout((20 * 60 * cpu_ms_2_cy(1000, 8000000)), &cleanTimer); //TODO: this time period will be parameterized from the technician UART interface
+				cpu_set_timeout((20 * 60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //TODO: this time period will be parameterized from the technician UART interface
 #endif
-				cpu_set_timeout((20 * cpu_ms_2_cy(1000, 8000000)), &cleanTimer); //DEBUG 11may15 
+				cpu_set_timeout((20 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //DEBUG 11may15 
 
 				break;	
 				
@@ -1713,7 +1731,7 @@ int main(void)
 				door_latch_open_kill_all_shelves();
 
 				display_text(IDX_CLEAR);
-				cpu_delay_ms(500, 8000000);
+				cpu_delay_ms(500, EC_CPU_CLOCK_FREQ);
 				switch (electroclaveState)
 				{
 					case STATE_SANITIZE:

@@ -21,6 +21,6 @@ void OWWriteByte(unsigned char idx, int data);
 int OWReadByte(unsigned char idx);
 void gpio_input(unsigned char idx);
 
-
+#define EC_CPU_CLOCK_FREQ 100000000UL
 
 #endif  // _SERIAL_ID_DS2411_H_

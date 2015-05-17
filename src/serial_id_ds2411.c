@@ -105,23 +105,43 @@ int		A, B, C, D, E, F, G, H, I, J;
 void SetSpeed(int standard)
 {
 	// Adjust tick values depending on speed
+#if 0//experiment 16may15
 	if (standard)
 	{
 		// Standard Speed
 //14may15 we can't seem to control this tightly		A = 6; //us
-		A = 1; //should be 6 14may15
+		A = 6; //should be 6 14may15
 		B = 64;
 		C = 60;
 //14may15 we can't seem to control this tightly		D = 10;
 //14may15 we can't seem to control this tightly		E = 9;
-		D = 1; //should be 10 14may15
-		E = 3; //should be 9 14may15
+		D = 10; //should be 10 14may15
+		E = 9; //should be 9 14may15
 		F = 55;
 		G = 0;
 		H = 480;
 		I = 70;
 		J = 410;
 	}
+	
+#endif
+
+	if (standard) //experiment 16may15 cut everything in half, some issue with using the PLL? and fudge the tight numbers at the low end
+	{
+		// Standard Speed
+		A = 0; //6;
+		B = 32; //64;
+		C = 30; //60;
+		D = 2; //10;
+		E = 2; //9;
+		F = 27; //55;
+		G = 0; //0;
+		H = 240; //480;
+		I = 35; //70;
+		J = 205; //410;
+	}
+
+
 	else
 	{
 		// Overdrive Speed
@@ -147,24 +167,24 @@ int OWTouchReset(unsigned char idx)
 {
 	int result;
 
-	cpu_delay_us(A, 8000000);
+	cpu_delay_us(A, EC_CPU_CLOCK_FREQ);
 	drive_DQ_low(idx);
-	cpu_delay_us(H, 8000000);	//tRSTL (reset low) 480-640us
+	cpu_delay_us(H, EC_CPU_CLOCK_FREQ);	//tRSTL (reset low) 480-640us
 	release_the_bus(idx);
 	
 	gpio_input(idx); //14may15 experiment
 
 	
-	cpu_delay_us(I, 8000000);	//tMSP (presence detect sample) 60-75us
+	cpu_delay_us(I, EC_CPU_CLOCK_FREQ);	//tMSP (presence detect sample) 60-75us
 	result = sample_line(idx);
 	
 	gpio_input(idx); //14may15 experiement
 
-	cpu_delay_us(J, 8000000); // Complete the reset sequence recovery 5-??us (no max?)
+	cpu_delay_us(J, EC_CPU_CLOCK_FREQ); // Complete the reset sequence recovery 5-??us (no max?)
 	return result; // Return sample presence pulse result
 }
 
-
+void drive_DQ_low_and_release_the_bus(unsigned char idx);
 void drive_DQ_low_and_release_the_bus(unsigned char idx)
 {
 	unsigned char ioPin;
@@ -178,6 +198,8 @@ void drive_DQ_low_and_release_the_bus(unsigned char idx)
 	gpio_configure_pin(ioPin, ioFlagsOutput); //14may15 experiment
 
 	gpio_set_pin_low(ioPin);
+	
+	cpu_delay_us(A, EC_CPU_CLOCK_FREQ);	//tW1L 5-15us
 
 	gpio_configure_pin(ioPin, ioFlagsInput); //14may15 experiment
 	
@@ -195,18 +217,18 @@ void OWWriteBit(unsigned char idx, int bit)
 		drive_DQ_low_and_release_the_bus(idx);
 #if 0
 		drive_DQ_low(idx);
-//14may15 take this out entirely, we can't seem to control this precisely enough		cpu_delay_us(A, 8000000);	//tW1L 5-15us
+//14may15 take this out entirely, we can't seem to control this precisely enough		cpu_delay_us(A, EC_CPU_CLOCK_FREQ	//tW1L 5-15us
 		release_the_bus(idx);
 #endif
-		cpu_delay_us(B, 8000000);	// Complete the time slot and 10us recovery tSLOT 65-??us (no max)
+		cpu_delay_us(B, EC_CPU_CLOCK_FREQ);	// Complete the time slot and 10us recovery tSLOT 65-??us (no max)
 	}
 	else
 	{
 		// Write '0' bit
 		drive_DQ_low(idx);
-		cpu_delay_us(C, 8000000);	//tW0L 60-120us
+		cpu_delay_us(C, EC_CPU_CLOCK_FREQ);	//tW0L 60-120us
 		release_the_bus(idx);
-		cpu_delay_us(D, 8000000);	//tREC 5-??us
+		cpu_delay_us(D, EC_CPU_CLOCK_FREQ);	//tREC 5-??us
 	}
 }
 
@@ -220,14 +242,14 @@ int OWReadBit(unsigned char idx)
 
 #if 0
 	drive_DQ_low(idx);
-//14may15 take this out entirely, we can't seem to control this precisely enough	cpu_delay_us(A, 8000000);	//tRL 5-15us
+//14may15 take this out entirely, we can't seem to control this precisely enough	cpu_delay_us(A, EC_CPU_CLOCK_FREQ	//tRL 5-15us
 	release_the_bus(idx);
 #endif
 	drive_DQ_low_and_release_the_bus(idx);
 	
-//14may15 take this out, too tight	cpu_delay_us(E, 8000000);	//tMSR 5-15us
+	cpu_delay_us(E, EC_CPU_CLOCK_FREQ);	//tMSR 5-15us
 	result = sample_line(idx);
-	cpu_delay_us(F, 8000000); // Complete the time slot and 10us recovery tREC 5+us
+	cpu_delay_us(F, EC_CPU_CLOCK_FREQ); // Complete the time slot and 10us recovery tREC 5+us
 
 	return result;
 }

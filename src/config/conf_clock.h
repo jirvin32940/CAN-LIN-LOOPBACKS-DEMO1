@@ -50,13 +50,17 @@
  * @name System Clock Frequencies
  * @{
  */
-#define FMCK_HZ     FOSC0
+//16may15 #define FMCK_HZ     FOSC0
+#define FMCK_HZ		EC_CPU_CLOCK_FREQ //16may15
 #define FCPU_HZ     FMCK_HZ
 #define FHSB_HZ     FCPU_HZ
 #define FPBA_HZ     FMCK_HZ
 #define FPBB_HZ     FMCK_HZ
 //! @}
 
-#define F_CPU       FOSC0
+//16may15 #define F_CPU       FOSC0
+#define F_CPU       FOSC0 //16may15
+
+
 
 #endif /* CONF_CLOCK_H_INCLUDED */
