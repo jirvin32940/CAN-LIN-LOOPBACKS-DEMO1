@@ -167,20 +167,20 @@ int OWTouchReset(unsigned char idx)
 {
 	int result;
 
-	cpu_delay_us(A, EC_CPU_CLOCK_FREQ);
+	cpu_delay_us(A, EC_CPU_CLOCK_100MHZ);
 	drive_DQ_low(idx);
-	cpu_delay_us(H, EC_CPU_CLOCK_FREQ);	//tRSTL (reset low) 480-640us
+	cpu_delay_us(H, EC_CPU_CLOCK_100MHZ);	//tRSTL (reset low) 480-640us
 	release_the_bus(idx);
 	
 	gpio_input(idx); //14may15 experiment
 
 	
-	cpu_delay_us(I, EC_CPU_CLOCK_FREQ);	//tMSP (presence detect sample) 60-75us
+	cpu_delay_us(I, EC_CPU_CLOCK_100MHZ);	//tMSP (presence detect sample) 60-75us
 	result = sample_line(idx);
 	
 	gpio_input(idx); //14may15 experiement
 
-	cpu_delay_us(J, EC_CPU_CLOCK_FREQ); // Complete the reset sequence recovery 5-??us (no max?)
+	cpu_delay_us(J, EC_CPU_CLOCK_100MHZ); // Complete the reset sequence recovery 5-??us (no max?)
 	return result; // Return sample presence pulse result
 }
 
@@ -199,7 +199,7 @@ void drive_DQ_low_and_release_the_bus(unsigned char idx)
 
 	gpio_set_pin_low(ioPin);
 	
-	cpu_delay_us(A, EC_CPU_CLOCK_FREQ);	//tW1L 5-15us
+	cpu_delay_us(A, EC_CPU_CLOCK_100MHZ);	//tW1L 5-15us
 
 	gpio_configure_pin(ioPin, ioFlagsInput); //14may15 experiment
 	
@@ -217,18 +217,18 @@ void OWWriteBit(unsigned char idx, int bit)
 		drive_DQ_low_and_release_the_bus(idx);
 #if 0
 		drive_DQ_low(idx);
-//14may15 take this out entirely, we can't seem to control this precisely enough		cpu_delay_us(A, EC_CPU_CLOCK_FREQ	//tW1L 5-15us
+//14may15 take this out entirely, we can't seem to control this precisely enough		cpu_delay_us(A, EC_CPU_CLOCK_100MHZ	//tW1L 5-15us
 		release_the_bus(idx);
 #endif
-		cpu_delay_us(B, EC_CPU_CLOCK_FREQ);	// Complete the time slot and 10us recovery tSLOT 65-??us (no max)
+		cpu_delay_us(B, EC_CPU_CLOCK_100MHZ);	// Complete the time slot and 10us recovery tSLOT 65-??us (no max)
 	}
 	else
 	{
 		// Write '0' bit
 		drive_DQ_low(idx);
-		cpu_delay_us(C, EC_CPU_CLOCK_FREQ);	//tW0L 60-120us
+		cpu_delay_us(C, EC_CPU_CLOCK_100MHZ);	//tW0L 60-120us
 		release_the_bus(idx);
-		cpu_delay_us(D, EC_CPU_CLOCK_FREQ);	//tREC 5-??us
+		cpu_delay_us(D, EC_CPU_CLOCK_100MHZ);	//tREC 5-??us
 	}
 }
 
@@ -242,14 +242,14 @@ int OWReadBit(unsigned char idx)
 
 #if 0
 	drive_DQ_low(idx);
-//14may15 take this out entirely, we can't seem to control this precisely enough	cpu_delay_us(A, EC_CPU_CLOCK_FREQ	//tRL 5-15us
+//14may15 take this out entirely, we can't seem to control this precisely enough	cpu_delay_us(A, EC_CPU_CLOCK_100MHZ	//tRL 5-15us
 	release_the_bus(idx);
 #endif
 	drive_DQ_low_and_release_the_bus(idx);
 	
-	cpu_delay_us(E, EC_CPU_CLOCK_FREQ);	//tMSR 5-15us
+	cpu_delay_us(E, EC_CPU_CLOCK_100MHZ);	//tMSR 5-15us
 	result = sample_line(idx);
-	cpu_delay_us(F, EC_CPU_CLOCK_FREQ); // Complete the time slot and 10us recovery tREC 5+us
+	cpu_delay_us(F, EC_CPU_CLOCK_100MHZ); // Complete the time slot and 10us recovery tREC 5+us
 
 	return result;
 }
@@ -357,48 +357,21 @@ int OWOverdriveSkip(unsigned char idx, unsigned char *data, int data_len)
 	return OWTouchReset(idx);
 }
 
-//-----------------------------------------------------------------------------
-// Read and return the page data and SHA-1 message authentication code (MAC)
-// from a DS2432.
-//
-int ReadPageMAC(unsigned char idx, int page, unsigned char *page_data, unsigned char *mac);
-int ReadPageMAC(unsigned char idx, int page, unsigned char *page_data, unsigned char *mac)
+/* Polynomial ^8 + ^5 + ^4 + 1 */
+unsigned char crc8_add(unsigned char acc, unsigned char byte)
 {
-	int i;
-	unsigned short data_crc16, mac_crc16;
-
-	// set the speed to 'standard'
-	SetSpeed(1);
-
-	// select the device
-	if (OWTouchReset(idx)) // Reset the 1-Wire bus
-	return 0; // Return if no devices found
-
-	OWWriteByte(idx, 0xCC); // Send Skip ROM command to select single device
-
-	// read the page
-	OWWriteByte(idx, 0xA5); // Read Authentication command
-	OWWriteByte(idx, (page << 5) & 0xFF); // TA1
-	OWWriteByte(idx, 0); // TA2 (always zero for DS2432)
-
-	// read the page data
-	for (i = 0; i < 32; i++)
-	page_data[i] = OWReadByte(idx);
-	OWWriteByte(idx, 0xFF);
-
-	// read the CRC16 of command, address, and data
-	data_crc16 = OWReadByte(idx);
-	data_crc16 |= (OWReadByte(idx) << 8);
-
-	// delay 2ms for the device MAC computation
-	// read the MAC
-	for (i = 0; i < 20; i++)
-	mac[i] = OWReadByte(idx);
-
-	// read CRC16 of the MAC
-	mac_crc16 = OWReadByte(idx);
-	mac_crc16 |= (OWReadByte(idx) << 8);
-
-	// check CRC16...
-	return 1;
+   int i;
+   acc ^= byte;
+   for(i = 0; i < 8; i++) 
+   {
+		if(acc & 1) 
+		{
+			acc = (acc >> 1) ^ 0x8c;
+		} 
+		else 
+		{
+			acc >>= 1;
+	    }
+   }
+   return acc;
 }

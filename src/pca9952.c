@@ -144,9 +144,6 @@ void PCA9952_init(void) //7apr15
 {
 	volatile uint8_t tmp1, tmp2, tmp3, tmp4;
 	
-	#define LED_DRIVER_CURRENT (0xC8/2)		//This setting puts us at 20mA on each channel. 
-											//12apr15 cut the value in half because our power supply can't do full power for 4 shelves at the same time right now
-
 	/* Store cpu frequency locally*/
 //7apr15	cpu_hz = fcpu;
 

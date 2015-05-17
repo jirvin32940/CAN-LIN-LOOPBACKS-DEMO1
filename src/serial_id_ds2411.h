@@ -20,7 +20,9 @@ int OWTouchReset(unsigned char idx);
 void OWWriteByte(unsigned char idx, int data);
 int OWReadByte(unsigned char idx);
 void gpio_input(unsigned char idx);
+unsigned char crc8_add(unsigned char acc, unsigned char byte);
 
-#define EC_CPU_CLOCK_FREQ 100000000UL
+#define EC_CPU_CLOCK_100MHZ 100000000UL
+#define EC_CPU_CLOCK_FREQ 8000000 //OSC_RC8M_NOMINAL_HZ
 
 #endif  // _SERIAL_ID_DS2411_H_

@@ -145,6 +145,14 @@ enum {
 
 void led_shelf(unsigned char shelf, unsigned char onOffn);
 
+#define LED_DRIVER_CURRENT (0xC8/2)		//This setting puts us at 20mA on each channel.
+//12apr15 cut the value in half because our power supply can't do full power for 4 shelves at the same time right now
+//TODO: need to fix this in HW and then fix in SW
+	
+#define LED_TEST_DRIVER_CURRENT (LED_DRIVER_CURRENT/8)
+
+
+
 
 #endif // _PCA9952_H_
 

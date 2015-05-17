@@ -263,8 +263,8 @@ volatile U16 adc_current_conversion;
 
 
 enum {
-	SHELF_ACTIVE,
-	SHELF_INACTIVE
+	SHELF_INACTIVE,
+	SHELF_ACTIVE
 };
 
 
@@ -379,18 +379,28 @@ void read_led_board_serial_ids(void)
 //{
 	for (int i=0; i<NUM_LED_BOARDS; i++)
 	{
+		unsigned char acc = 0;
+		
 		if (ledBrd[i].present)
 		{
 			OWWriteByte(i, 0x33); //Read ID command
 			
 			ledBrd[i].idFamily = OWReadByte(i);
 			
+			acc = crc8_add(0x00, ledBrd[i].idFamily);
+			
 			for (int j=0; j<6; j++)
 			{
 				ledBrd[i].id[j] = OWReadByte(i);
+				acc = crc8_add(acc, ledBrd[i].id[j]);
 			}
 			
 			ledBrd[i].idcsum = OWReadByte(i);
+			
+			if (acc != ledBrd[i].idcsum)
+			{
+				ledBrd[i].present = 0; //crc8 wasn't valid for this ID chip, don't trust the board
+			}
 		}
 	}
 //}//DEBUG 12may15
@@ -599,75 +609,86 @@ void check_shelves_for_devices(void)
 
 unsigned char numActiveShelves;
 
-unsigned char topEflag0, topEflag1, botEflag0, botEflag1;
+unsigned char topEflag0 = 0, topEflag1 = 0, botEflag0 = 0, botEflag1 = 0;
 
 void set_shelves_active_inactive(void);
 void set_shelves_active_inactive(void)
 {
-	numActiveShelves = 0;
+	unsigned char tmp1, tmp2, numShelvesPresent = 0;
 	
-/*
- * Test which shelves are present in the system.
- * NOTE: We should do this at the board level, being sloppy
- * before the trade show, just trying to get it done. 10apr15
- *
- * Actually going to abandon this as a strategy for detecting whether
- * an LED board is present, problematic. Go back to trying to detect
- * LED board presence with the ID chip.
- */
-
-#if 0	//TODO: NOTE we can't do this right now, turn all the shelves on full power at once, because the power supply can't supply it. Also not sure how to use the LED driver chip to check for LED shorts and opens
-		//it's more complicated than it looks, fix this later.
-
-	unsigned char tmp1, tmp2, tmp3, tmp4;
-
-	led_shelf(0, LED_ON);
-	led_shelf(1, LED_ON);
-	led_shelf(2, LED_ON);
-	led_shelf(3, LED_ON);
-	
-	PCA9952_write_reg(LED_TOP, PCA9952_MODE2, 0x40); //starts fault test
-	PCA9952_write_reg(LED_BOTTOM, PCA9952_MODE2, 0x40); //starts fault test
-	
-	while (1)
+	for (int i=0; i<NUM_SHELVES; i++)
 	{
-		tmp1 = PCA9952_read_reg(LED_TOP, PCA9952_MODE2);
-		
-		if ((tmp1 & 0x40) == 0)
-		{
-			topEflag0 = PCA9952_read_reg(LED_TOP, PCA9952_EFLAG0);
-			topEflag1 = PCA9952_read_reg(LED_TOP, PCA9952_EFLAG1);
-			
-			break; //fault test for LED_TOP board is complete
+		if (shelf[i].present)
+		{	
+			numShelvesPresent++;
 		}
-		
 	}
 	
-	while (1)
+	if (numShelvesPresent !=0)
 	{
-		tmp3 = PCA9952_read_reg(LED_BOTTOM, PCA9952_MODE2);
-		
-		if ((tmp3 & 0x40) == 0)
+		//Tone down the current so all shelves can be turned on at once
+		PCA9952_write_reg(LED_TOP, PCA9952_IREFALL, LED_TEST_DRIVER_CURRENT);
+		PCA9952_write_reg(LED_BOTTOM, PCA9952_IREFALL, LED_TEST_DRIVER_CURRENT);
+
+		for (int i=0; i<NUM_SHELVES; i++)
 		{
-			botEflag0 = PCA9952_read_reg(LED_BOTTOM, PCA9952_EFLAG0);
-			botEflag1 = PCA9952_read_reg(LED_BOTTOM, PCA9952_EFLAG1);
+			if (shelf[i].present)
+			{
+				led_shelf(i, LED_ON);	
+			}
+		}
+
+		PCA9952_write_reg(LED_TOP, PCA9952_MODE2, 0x40); //starts fault test
+		PCA9952_write_reg(LED_BOTTOM, PCA9952_MODE2, 0x40); //starts fault test
+	
+		while (1)
+		{
+			tmp1 = PCA9952_read_reg(LED_TOP, PCA9952_MODE2);
+		
+			if ((tmp1 & 0x40) == 0)
+			{
+				topEflag0 = PCA9952_read_reg(LED_TOP, PCA9952_EFLAG0);
+				topEflag1 = PCA9952_read_reg(LED_TOP, PCA9952_EFLAG1);
 			
-			break; //fault test for LED_TOP board is complete
+				break; //fault test for LED_TOP strings is complete
+			}
+		
+		}
+	
+		while (1)
+		{
+			tmp2 = PCA9952_read_reg(LED_BOTTOM, PCA9952_MODE2);
+		
+			if ((tmp2 & 0x40) == 0)
+			{
+				botEflag0 = PCA9952_read_reg(LED_BOTTOM, PCA9952_EFLAG0);
+				botEflag1 = PCA9952_read_reg(LED_BOTTOM, PCA9952_EFLAG1);
+			
+				break; //fault test for LED_BOTTOM strings is complete
+			}
+		
 		}
 		
+		//TODO: Deal with the errors from the above tests, topEflag0, topEflag1, botEflag0, botEflag1. Report on the technician interface.
+	
+		for (int i=0; i<NUM_SHELVES; i++)
+		{
+			led_shelf(i, LED_OFF);
+		}
+		
+		//Put driver current back to full power
+		PCA9952_write_reg(LED_TOP, PCA9952_IREFALL, LED_DRIVER_CURRENT);
+		PCA9952_write_reg(LED_BOTTOM, PCA9952_IREFALL, LED_DRIVER_CURRENT);
+
 	}
-	
-	led_shelf(0, LED_OFF);
-	led_shelf(1, LED_OFF);
-	led_shelf(2, LED_OFF);
-	led_shelf(3, LED_OFF);
-	
-#endif	
-	
+
+
+
 	/*
-	 * The rest of the evaluation
+	 * Continuing the evaluation
 	 */
 	
+	numActiveShelves = 0;
 	
 	for (int i=0; i<NUM_SHELVES; i++)
 	{
@@ -755,16 +776,28 @@ void init_sys_clocks(void)
 
 #endif  //experiment to see if cranking up the clock enables us to read the serial ID chip while running the debugger 16may15
 
+//this kinda works for 100MHz, problems with TWIM, but maybe we can work around that 17may15
 /*
  * From CLOCK_EXAMPLE31 which changes clock sources on the fly. Trying to get a faster clock so that we can work with the serial ID chip (DS2411) which needs control to 6us. 16may15
  */
 	osc_enable(OSC_ID_RC8M);
-	pll_config_init(&pcfg, PLL_SRC_RC8M, 1, EC_CPU_CLOCK_FREQ/OSC_RC8M_NOMINAL_HZ);
+	pll_config_init(&pcfg, PLL_SRC_RC8M, 1, EC_CPU_CLOCK_100MHZ/OSC_RC8M_NOMINAL_HZ);
 	pll_enable(&pcfg, 0);
 	sysclk_set_prescalers(1,1,1,1);
 	pll_wait_for_lock(0);
 	sysclk_set_source(SYSCLK_SRC_PLL0);	
 
+
+#if 0 //this goes to an exception for some reason 17may15
+/*
+ * From CLOCK_EXAMPLE31 which changes clock sources on the fly. Trying to get a faster clock so that we can work with the serial ID chip (DS2411) which needs control to 6us. 17may15
+ */
+	osc_enable(OSC_ID_RC120M);
+	osc_wait_ready(OSC_ID_RC120M);
+	flash_set_bus_freq(sysclk_get_cpu_hz());
+	sysclk_set_source(SYSCLK_SRC_RC120M);
+	
+#endif
 	/* put the clock out on PC19 so we can check to make sure we set it up correctly */
 	//Note this code comes from ASF example AVR32 SCIF example 3
 //16may15 seems to cause problems, leave out for now	scif_start_gclk(AVR32_SCIF_GCLK_GCLK0PIN, &gclkOpt);
@@ -1484,13 +1517,37 @@ unsigned char firstTimeThrough = 1;
 int main(void)
 {
 	static unsigned char displayIdx = 0;
-	unsigned long usec = 1000;
+	unsigned long usec = 1000, stayInLoop = 0;
 	
 	// Initialize System Clock
 	init_sys_clocks();
 
 	init_io();
 	
+
+	init_led_board_info();
+	
+	while (stayInLoop)
+	{
+		gpio_toggle_pin(ECLAVE_DEBUG_LED);
+		cpu_delay_us(usec, EC_CPU_CLOCK_100MHZ);
+	}
+
+	//Set clock to 8MHz. We start at 100MHz to get through the DS2411 LED board serial ID detection. But we don't need to run that fast for remaining operations.
+	
+	osc_enable(OSC_ID_RC8M);
+	osc_wait_ready(OSC_ID_RC8M);
+	sysclk_set_source(SYSCLK_SRC_RC8M);
+	sysclk_set_prescalers(0,0,0,0);
+	pll_disable(0);
+
+	while (stayInLoop)
+	{
+		gpio_toggle_pin(ECLAVE_DEBUG_LED);
+		cpu_delay_us(usec, EC_CPU_CLOCK_FREQ);
+	}
+
+
 
 	// Initialize USART
 	init_ecdbg_rs232(FPBA_HZ);
@@ -1508,16 +1565,16 @@ int main(void)
 	irq_initialize_vectors(); //TODO: probably remove 5apr15
 
 	cpu_irq_enable();
+
+
 	
 	// Initialize TWI Interface
 	twi_init();
 
 	gpio_set_pin_high(ECLAVE_LED_OEn); //make sure outputs are disabled at the chip level
-//16may15 DEBUG need to put this back in once we get the clock stuff worked out	PCA9952_init();
+	PCA9952_init();
 	
 	electroclaveState = STATE_EC_IDLE;
-	
-	init_led_board_info();
 	
 	gpio_set_pin_low(ECLAVE_LED_OEn); //...and we are live!
 	gpio_set_pin_low(ECLAVE_PSUPPLY_ONn); //turn the leds on first and then the power supply
