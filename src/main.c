@@ -75,6 +75,7 @@
 #include "serial_id_ds2411.h"	//9apr15
 #include "flashc.h"				//2may15
 #include "string.h"
+#include "stdio.h"
 #include "sysclk.h"
 #include <pll.h>
 
@@ -86,9 +87,14 @@ unsigned char calc_usage_csum(unsigned char sel);
 void copy_usage_to_usage(unsigned char dst, unsigned char src);
 void write_usage_to_flash(unsigned char sel);
 void load_usage_indeces(unsigned char sel);
+unsigned char minute_count(unsigned char * pMinuteBits);
+void reset_minutes(unsigned char * pMinuteBits);
+unsigned char inc_minutes(unsigned char * pMinuteBits);
 
 
-unsigned char pingPong; //used to toggle between 2 regions of flash
+
+unsigned char minPingPong; //used to toggle between 2 buffers each minute
+unsigned char hourPingPong; //used to toggle between 2 regions of flash each hour
 
 #define NO_LED_BOARD_PRESENT 0xFF
 #define NUM_LED_BOARDS			5
@@ -185,8 +191,8 @@ typedef struct {
 	unsigned char hrs_huns	: 4;
 	unsigned char hrs_tens	: 4;
 	unsigned char hrs_ones	: 4;
-	unsigned char min_tens	: 4;
-	unsigned char min_ones	: 4;
+	
+	unsigned char minuteBits[8];	//flip one bit from 1 to 0 each minute, saves us from having to erase flash every minute, we will only need to erase flash once per hour
 	
 } SERIAL_ID_AND_USAGE; //10 bytes each
 
@@ -951,6 +957,65 @@ static SERIAL_ID_AND_USAGE serialIdAndUsageFlashOne[NUM_SETS_LED_BOARD_SIDES * N
 #endif
 ;
 
+
+unsigned char minute_count(unsigned char * pMinuteBits)
+{
+	unsigned char tmpMinBits, minuteCount = 0, bit;
+	
+	for (int i=0; i<8; i++)
+	{
+		tmpMinBits = *(pMinuteBits+i);
+		bit = 0x80;
+		for (int j=0; j<8; j++)
+		{
+			if ((bit & tmpMinBits) == 0)
+			{
+				minuteCount++;
+			}
+			
+			bit >>= 1;
+		}
+	}
+	
+	return minuteCount;
+}
+
+unsigned char inc_minutes(unsigned char * pMinuteBits)
+{
+	unsigned char bit, invBit, tmpMinBits, minCount = 0;
+	
+	for (int i=0; i<8; i++)
+	{
+		bit = 0x80;
+		tmpMinBits = (*(pMinuteBits+i));
+		
+		for (int j=0; j<8; j++)
+		{
+			minCount++;			
+			if (bit & tmpMinBits)
+			{
+				invBit = (bit ^= 0xFF);
+				tmpMinBits &= invBit;
+				(*(pMinuteBits+i)) = tmpMinBits;
+				return minCount;
+			}
+			bit >>= 1;
+		}
+	}
+	
+	return 0; //we should never get here, but we need this to avoid the warning
+}
+
+
+void reset_minutes(unsigned char * pMinuteBits)
+{
+	for (int i=0; i<8; i++)
+	{
+		*(pMinuteBits+i) = 0xFF; //Set to all ones: we will flip one bit from 1 to 0 each minute to save from having to erase flash every minute
+	}	
+	
+}
+
 #define STRINGS_MATCH 0
 
 unsigned char usage_idx(unsigned char sel, unsigned char * idPtr, unsigned char top_botn);
@@ -1148,8 +1213,12 @@ unsigned char calc_usage_csum(unsigned char sel)
 		csum += usageShdw[sel].u[i].hrs_huns;
 		csum += usageShdw[sel].u[i].hrs_tens;
 		csum += usageShdw[sel].u[i].hrs_ones;
-		csum += usageShdw[sel].u[i].min_tens;
-		csum += usageShdw[sel].u[i].min_ones;
+		
+// We are not including minuteBits in the structure checksum on purpose since we are updating minuteBits every minute, but only writing the whole structure to flash once per hour
+//		for (int j=0; j<8; j++)
+//		{
+//			csum += usageShdw[sel].u[i].minuteBits[j];
+//		}
 		
 		csum += usageShdw[sel].u[i].id[0];
 		csum += usageShdw[sel].u[i].id[1];
@@ -1183,6 +1252,20 @@ void write_usage_to_flash(unsigned char sel)
 	}
 }
 
+void write_usage_to_flash_no_erase(unsigned char sel);
+void write_usage_to_flash_no_erase(unsigned char sel)
+{
+	if (sel == 0)
+	{
+		flashc_memcpy(serialIdAndUsageFlashZero, &usageShdw[0], sizeof(usageShdw[0]),false);
+	}
+	else
+	{
+		flashc_memcpy(serialIdAndUsageFlashOne, &usageShdw[1], sizeof(usageShdw[1]),false);
+	}
+}
+
+
 unsigned long calc_usage_current_led_boards(unsigned char sel);
 unsigned long calc_usage_current_led_boards(unsigned char sel)
 {
@@ -1190,8 +1273,7 @@ unsigned long calc_usage_current_led_boards(unsigned char sel)
 		hrs_huns = 0, 
 		hrs_tens = 0, 
 		hrs_ones = 0, 
-		min_tens = 0, 
-		min_ones = 0;
+		minutes = 0; 
 		
 	unsigned char idx;
 	unsigned long retMinutes;
@@ -1206,14 +1288,14 @@ unsigned long calc_usage_current_led_boards(unsigned char sel)
 			hrs_huns += usageShdw[sel].u[idx].hrs_huns;
 			hrs_tens += usageShdw[sel].u[idx].hrs_tens;
 			hrs_ones += usageShdw[sel].u[idx].hrs_ones;
-			min_tens += usageShdw[sel].u[idx].min_tens;
-			min_ones += usageShdw[sel].u[idx].min_ones;
+			
+			minutes += minute_count(&usageShdw[sel].u[idx].minuteBits[0]);
 		}
 	}
 	
 	retMinutes = (hrs_thous * 1000) + (hrs_huns * 100) + (hrs_tens * 10) + (hrs_ones);
 	retMinutes *= 60;
-	retMinutes += ((min_tens * 10) + (min_ones));
+	retMinutes += minutes;
 	
 	return retMinutes;
 }
@@ -1226,6 +1308,7 @@ void increment_ledBoard_usage_min(void)
 	unsigned char bottomLEDboardUpperSideIdx;
 	unsigned char topUIdx;
 	unsigned char bottomUIdx;
+	unsigned char hourRollover = 0;
 	
 	for (unsigned char i=0; i<NUM_SHELVES; i++) //check every active shelf
 	{
@@ -1237,7 +1320,7 @@ void increment_ledBoard_usage_min(void)
 			topUIdx = ledBrdSide[topLEDboardLowerSideIdx].ushdwIdx;
 			bottomUIdx = ledBrdSide[bottomLEDboardUpperSideIdx].ushdwIdx;
 		
-			for (unsigned char j=0; j<2; j++) //for each copy of usageShdw[] (update both copies every time)
+			for (unsigned char j=0; j<2; j++) //for each copy of usageShdw[] (update both copies every time even though we only write one to flash each time)
 			{
 				for (unsigned char k=0; k<2; k++) //for each board side in the shelf
 				{
@@ -1251,46 +1334,55 @@ void increment_ledBoard_usage_min(void)
 							break;
 					}
 
-					if (++(tmp->min_ones) > 9)
+					if (inc_minutes(tmp->minuteBits) > 59)
 					{
-						tmp->min_ones = 0;
-				
-						if (++(tmp->min_tens) > 5)
+						reset_minutes(tmp->minuteBits);
+
+						if (j == hourPingPong)
 						{
-							tmp->min_tens = 0;
+							hourRollover++; //count number of board sides that had hours rollover this pass for the current hourPingPong selection
+						}
 					
-							if (++(tmp->hrs_ones) > 9)
-							{
-								tmp->hrs_ones = 0;
+						if (++(tmp->hrs_ones) > 9)
+						{
+							tmp->hrs_ones = 0;
 						
-								if (++(tmp->hrs_tens) > 9)
-								{
-									tmp->hrs_tens = 0;
+							if (++(tmp->hrs_tens) > 9)
+							{
+								tmp->hrs_tens = 0;
 							
-									if (++(tmp->hrs_huns) > 9)
-									{
-										tmp->hrs_huns = 0;
+								if (++(tmp->hrs_huns) > 9)
+								{
+									tmp->hrs_huns = 0;
 								
-										if (++(tmp->hrs_thous) > 1)
-										{
-											tmp->maxUsageReached = 1; //And...we're done. Reached 2000 hours.
-										} //hrs_thous
-									} //hrs_huns
-								} //hrs_tens 
-							} //hrs_ones
-						} //min_tens
-					} //min_ones
+									if (++(tmp->hrs_thous) > 1)
+									{
+										tmp->maxUsageReached = 1; //And...we're done. Reached 2000 hours.
+									} //hrs_thous
+								} //hrs_huns
+							} //hrs_tens 
+						} //hrs_ones
+					} //minuteBits
 				} //for each board side in the shelf (k)
 			} //for each copy of usageShdw
 		} //if (shelf[i].active)
 	} //for (i=0; i<NUM_SHELVES; i++)
 	
-	usageShdw[pingPong].csum = calc_usage_csum(pingPong);
-			
-	write_usage_to_flash(pingPong);
+	if (hourRollover)
+	{
+		usageShdw[hourPingPong].csum = calc_usage_csum(hourPingPong);
+		write_usage_to_flash(hourPingPong);
+		hourRollover = 0; //reset for next pass
+		hourPingPong++;
+		hourPingPong &= 1; //toggle between 0 (EVEN) and 1 (ODD)
+	}
+	else
+	{
+//17may15 TODO: this doesn't seem to work, maybe we can live without it for now.		write_usage_to_flash_no_erase(minPingPong); //all data should be the same except minuteBits, don't update the checksum when we are only updating minuteBits
+	}
 	
-	pingPong++;
-	pingPong &= 1; //toggle between 0 (EVEN) and 1 (ODD)
+	minPingPong++;
+	minPingPong &= 1; //toggle between 0 (EVEN) and 1 (ODD)
 }
 
 
@@ -1410,6 +1502,11 @@ void init_led_board_info(void)
 	else
 	{
 		memset(&usageShdw[0], 0x00, sizeof(usageShdw[0]));
+		
+		for (int i=0; i<(NUM_LED_BOARD_SIDES * NUM_SETS_LED_BOARD_SIDES); i++)
+		{
+			reset_minutes(&usageShdw[0].u[i].minuteBits[0]);
+		}
 	}
 	
 	if (usage1good)
@@ -1419,6 +1516,11 @@ void init_led_board_info(void)
 	else
 	{
 		memset(&usageShdw[1], 0x00, sizeof(usageShdw[1]));
+
+		for (int i=0; i<(NUM_LED_BOARD_SIDES * NUM_SETS_LED_BOARD_SIDES); i++)
+		{
+			reset_minutes(&usageShdw[1].u[i].minuteBits[0]);
+		}
 	}
 	
 	if ((!usage0good) && (!usage1good)) //Chassis is probably powering up for the first time
@@ -1437,7 +1539,8 @@ void init_led_board_info(void)
 		copy_usage_to_usage(1,0);
 		write_usage_to_flash(0);
 		write_usage_to_flash(1);
-		pingPong = 0;
+		minPingPong = 0;
+		hourPingPong = 0;
 		
 	}
 	else if (usage0good && usage1good) //Both usage structs are good, find the newer one
@@ -1472,7 +1575,8 @@ void init_led_board_info(void)
 		}
 
 		write_usage_to_flash(newer);
-		pingPong = 0;
+		minPingPong = 0;
+		hourPingPong = 0;
 		
 	}
 	else //Only one usage struct is good, the other was probably corrupted during a power-down while sanitizing
@@ -1504,10 +1608,50 @@ void init_led_board_info(void)
 		}
 		
 		write_usage_to_flash(good);
-		pingPong = 0;
+		minPingPong = 0;
+		hourPingPong = 0;
 	}
 	
 }
+
+void show_chassis_status_info(void);
+void show_chassis_status_info(void)
+{
+	char pStr[80];
+	unsigned char uSideIdx, lSideIdx, uSideUsageIdx, lSideUsageIdx, uSideMinutes, lSideMinutes;
+	
+	print_ecdbg("\r\n***INSTALLED LED BOARDS***\r\n\r\n");
+	
+	print_ecdbg("SLOT    ID              TOP HRS:MIN    BOT HRS:MIN\r\n");
+	print_ecdbg("--------------------------------------------------\r\n");
+	
+	for (int i=0; i<NUM_LED_BOARDS; i++)
+	{
+		if (ledBrd[i].present)
+		{
+			uSideIdx = ledBrd[i].uSideIdx;
+			lSideIdx = ledBrd[i].lSideIdx; 
+			
+			uSideUsageIdx = ledBrdSide[uSideIdx].ushdwIdx;
+			lSideUsageIdx = ledBrdSide[lSideIdx].ushdwIdx;
+			
+			uSideMinutes = minute_count(&usageShdw[0].u[uSideUsageIdx].minuteBits[0]);
+			lSideMinutes = minute_count(&usageShdw[0].u[lSideUsageIdx].minuteBits[0]);
+			
+			sprintf(pStr, " %d      %X%X%X%X%X%X         %01d%01d%01d%01d:%02d        %01d%01d%01d%01d:%02d\r\n", 
+				i, 
+				ledBrd[i].id[0], ledBrd[i].id[1], ledBrd[i].id[2], ledBrd[i].id[3], ledBrd[i].id[4], ledBrd[i].id[5],
+				usageShdw[0].u[uSideUsageIdx].hrs_thous, usageShdw[0].u[uSideUsageIdx].hrs_huns, usageShdw[0].u[uSideUsageIdx].hrs_tens, usageShdw[0].u[uSideUsageIdx].hrs_ones, uSideMinutes,
+				usageShdw[0].u[lSideUsageIdx].hrs_thous, usageShdw[0].u[lSideUsageIdx].hrs_huns, usageShdw[0].u[lSideUsageIdx].hrs_tens, usageShdw[0].u[lSideUsageIdx].hrs_ones, lSideMinutes);
+			print_ecdbg(pStr);
+		}
+	}
+	
+	printf("\r\n\r\n");
+	
+}
+
+
 
 unsigned char firstTimeThrough = 1;
 
@@ -1554,7 +1698,7 @@ int main(void)
 	init_display_rs232(FPBA_HZ);
 
 	// Print Startup Message
-	print_ecdbg("SEAL SHIELD DEMO \r\n Copyright (c) 2015 Technical Solutions Group, Inc.\r\n");
+	print_ecdbg("\r\nSEAL SHIELD DEMO\r\nCopyright (c) 2015 Technical Solutions Group, Inc.\r\n");
 	display_text(IDX_READY);
 	
 	// Initialize ADC for bluesense channels which are used to see if there are any devices (phones, tablets, etc.) on the shelves
@@ -1575,6 +1719,8 @@ int main(void)
 	PCA9952_init();
 	
 	electroclaveState = STATE_EC_IDLE;
+	
+	show_chassis_status_info();
 	
 	gpio_set_pin_low(ECLAVE_LED_OEn); //...and we are live!
 	gpio_set_pin_low(ECLAVE_PSUPPLY_ONn); //turn the leds on first and then the power supply
