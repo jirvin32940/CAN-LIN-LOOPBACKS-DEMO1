@@ -197,9 +197,10 @@ typedef struct {
 } SERIAL_ID_AND_USAGE; //10 bytes each
 
 
-
 typedef struct {
 		SERIAL_ID_AND_USAGE u[NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES];
+		unsigned long		totalSanitationMinutes;
+		unsigned long		totalSanitationCycles;		
 		unsigned char		csum;
 	} USAGE_SHADOW;
 
@@ -777,7 +778,7 @@ void set_shelves_active_inactive(void)
 			
 				if ((botEflag0 != 0) || (botEflag1 != 0))
 				{
-					print_pca9952_errors(BOTTOM, topEflag0, topEflag1);
+					print_pca9952_errors(BOTTOM, botEflag0, botEflag1);
 				}
 				
 				break; //fault test for LED_BOTTOM strings is complete
@@ -1348,6 +1349,9 @@ unsigned char calc_usage_csum(unsigned char sel)
 		csum += usageShdw[sel].u[i].slotFilled;
 	}
 	
+	csum += usageShdw[sel].totalSanitationCycles;
+	csum += usageShdw[sel].totalSanitationMinutes;
+	
 	return csum;
 }
 
@@ -1759,35 +1763,107 @@ void show_chassis_status_info(void)
 {
 	char pStr[80];
 	unsigned char uSideIdx, lSideIdx, uSideUsageIdx, lSideUsageIdx, uSideMinutes, lSideMinutes;
+	unsigned char sanMinutesMax = 0, sanMinutesMin = 0xFF, sanMinutesUpper, sanMinutesLower, uHrs_thous, uHrs_huns, uHrs_tens, uHrs_ones, lHrs_thous, lHrs_huns, lHrs_tens, lHrs_ones;
 	
 	print_ecdbg("\r\n***INSTALLED LED BOARDS***\r\n\r\n");
 	
-	print_ecdbg("SLOT    ID       UPPER SIDE HRS:MIN    LOWER SIDE HRS:MIN\r\n");
-	print_ecdbg("---------------------------------------------------------\r\n");
+	print_ecdbg(" LED | LED BOARD  |     UPPER SIDE     |     LOWER SIDE  \r\n");
+	print_ecdbg("SLOT |    ID      | HRS:MIN    DTE     | HRS:MIN    DTE  \r\n");
+	print_ecdbg("--------------------------------------------------------\r\n");
 	
 	for (int i=0; i<NUM_LED_BOARDS; i++)
 	{
 		if (ledBrd[i].present)
 		{
 			uSideIdx = ledBrd[i].uSideIdx;
-			lSideIdx = ledBrd[i].lSideIdx; 
+			lSideIdx = ledBrd[i].lSideIdx;
 			
-			uSideUsageIdx = ledBrdSide[uSideIdx].ushdwIdx;
-			lSideUsageIdx = ledBrdSide[lSideIdx].ushdwIdx;
+			if (uSideIdx != NO_LED_BOARD_PRESENT)
+			{
+				uSideUsageIdx = ledBrdSide[uSideIdx].ushdwIdx;	
+				uSideMinutes = minute_count(&usageShdw[0].u[uSideUsageIdx].minuteBits[0]);
+				check_led_brd_side_lifetime(uSideIdx);
+				sanMinutesUpper = ledBrdSide[uSideIdx].sanitizeMinutes;
+				uHrs_thous = usageShdw[0].u[uSideUsageIdx].hrs_thous;
+				uHrs_huns = usageShdw[0].u[uSideUsageIdx].hrs_huns;
+				uHrs_tens = usageShdw[0].u[uSideUsageIdx].hrs_tens;
+				uHrs_ones = usageShdw[0].u[uSideUsageIdx].hrs_ones;
+			}
+			else
+			{
+				uHrs_thous = 0;
+				uHrs_huns = 0;
+				uHrs_tens = 0;
+				uHrs_ones = 0;
+				uSideMinutes = 0;
+				sanMinutesUpper = 0;
+			}
 			
-			uSideMinutes = minute_count(&usageShdw[0].u[uSideUsageIdx].minuteBits[0]);
-			lSideMinutes = minute_count(&usageShdw[0].u[lSideUsageIdx].minuteBits[0]);
+			if (lSideIdx != NO_LED_BOARD_PRESENT)
+			{
+				lSideUsageIdx = ledBrdSide[lSideIdx].ushdwIdx;	
+				lSideMinutes = minute_count(&usageShdw[0].u[lSideUsageIdx].minuteBits[0]);
+				check_led_brd_side_lifetime(lSideIdx);
+				sanMinutesLower = ledBrdSide[lSideIdx].sanitizeMinutes;
+				lHrs_thous = usageShdw[0].u[lSideUsageIdx].hrs_thous;
+				lHrs_huns = usageShdw[0].u[lSideUsageIdx].hrs_huns;
+				lHrs_tens = usageShdw[0].u[lSideUsageIdx].hrs_tens;
+				lHrs_ones = usageShdw[0].u[lSideUsageIdx].hrs_ones;
+			}
+			else
+			{
+				lHrs_thous = 0;
+				lHrs_huns = 0;
+				lHrs_tens = 0;
+				lHrs_ones = 0;
+				lSideMinutes = 0;
+				sanMinutesLower = 0;
+			} 
 			
-			sprintf(pStr, " %d      %X%X%X%X%X%X         %01d%01d%01d%01d:%02d               %01d%01d%01d%01d:%02d\r\n", 
+			
+			sprintf(pStr, " %d      %X%X%X%X%X%X %01d%01d%01d%01d:%02d     %02d       %01d%01d%01d%01d:%02d     %02d\r\n", 
 				i, 
 				ledBrd[i].id[0], ledBrd[i].id[1], ledBrd[i].id[2], ledBrd[i].id[3], ledBrd[i].id[4], ledBrd[i].id[5],
-				usageShdw[0].u[uSideUsageIdx].hrs_thous, usageShdw[0].u[uSideUsageIdx].hrs_huns, usageShdw[0].u[uSideUsageIdx].hrs_tens, usageShdw[0].u[uSideUsageIdx].hrs_ones, uSideMinutes,
-				usageShdw[0].u[lSideUsageIdx].hrs_thous, usageShdw[0].u[lSideUsageIdx].hrs_huns, usageShdw[0].u[lSideUsageIdx].hrs_tens, usageShdw[0].u[lSideUsageIdx].hrs_ones, lSideMinutes);
+				uHrs_thous, uHrs_huns, uHrs_tens, uHrs_ones, uSideMinutes,
+				sanMinutesUpper,
+				lHrs_thous, lHrs_huns, lHrs_tens, lHrs_ones, lSideMinutes,
+				sanMinutesLower);
 			print_ecdbg(pStr);
+			
+
+			/* 
+			 * Determine the min and max sanitize times for the LED boards that are currently installed
+			 */
+			if ((sanMinutesMax < sanMinutesUpper) && (sanMinutesUpper != 0))
+			{
+				sanMinutesMax = sanMinutesUpper;
+			}
+			if ((sanMinutesMax < sanMinutesLower) && (sanMinutesLower != 0))
+			{
+				sanMinutesMax = sanMinutesLower;
+			}
+			if ((sanMinutesMin > sanMinutesUpper) && (sanMinutesUpper != 0))
+			{
+				sanMinutesMin = sanMinutesUpper;
+			}
+			if ((sanMinutesMin > sanMinutesLower) && (sanMinutesLower != 0))
+			{
+				sanMinutesMin = sanMinutesLower;
+			}
 		}
 	}
 	
-	printf("\r\n\r\n");
+	print_ecdbg("MAX DTE: ");
+	print_ecdbg_num(sanMinutesMax);
+	print_ecdbg(" MIN DTE: ");
+	print_ecdbg_num(sanMinutesMin);
+	print_ecdbg("\r\n");
+	
+	print_ecdbg("TOTAL SANITIZE HOURS: ");
+	print_ecdbg_num(usageShdw[0].totalSanitationMinutes/24);
+	print_ecdbg(" TOTAL SANITIZE CYCLES: ");
+	print_ecdbg_num(usageShdw[0].totalSanitationCycles);
+	print_ecdbg("\r\n");
 	
 }
 
@@ -1956,6 +2032,8 @@ void show_chassis_all_LED_boards(void)
 		i++;
 		
 	}
+	
+	print_ecdbg("\r\n\r\n");
 
 }
 
@@ -2065,7 +2143,7 @@ int main(void)
 				set_shelves_active_inactive();
 				
 				if (num_active_shelves() != 0) {
-					electroclaveState = STATE_START_SANITIZE;	
+					electroclaveState = STATE_START_SANITIZE;
 					print_ecdbg("Start sanitizing\r\n");
 					display_text(IDX_CLEAR);
 					cpu_delay_ms(500, EC_CPU_CLOCK_FREQ);
@@ -2111,6 +2189,10 @@ int main(void)
 				cpu_set_timeout((sanitizeMinutes * 60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &sanitizeTimer);
 #endif
 				cpu_set_timeout((sanitizeMinutes * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &sanitizeTimer); //DEBUG take this out when done debugging logic, put it back to minutes 11may15
+				usageShdw[0].totalSanitationCycles++;
+				usageShdw[1].totalSanitationCycles++;
+				usageShdw[0].totalSanitationMinutes += sanitizeMinutes;
+				usageShdw[1].totalSanitationMinutes += sanitizeMinutes;
 
 				
 //DEBUG 11may15 do this once per second for debug				cpu_set_timeout((60 * cpu_ms_2_cy(1000,EC_CPU_CLOCK_FREQ)), &oneMinuteTimer); //one minute for the usage statistics
