@@ -206,6 +206,29 @@ typedef struct {
 USAGE_SHADOW usageShdw[2];
 
 
+enum {SE_PASS, SE_FAIL};
+
+typedef struct 
+{
+	unsigned char	topdrive;
+	unsigned int	botdrive;	
+	unsigned int	flashArea;		
+	unsigned char	ledBrdSerialIdCsum;
+	unsigned char	ledBrdSideMaxUsage;	
+	unsigned char	usageStructsFull;
+	
+}SYSERR;
+
+SYSERR sysErr;
+
+#define BIT(x) (1<<(x))
+
+void init_sysErr(void);
+void init_sysErr(void)
+{
+	memset(&sysErr, 0x00, sizeof(sysErr)); //Init everything to "PASS"
+}
+
 /*
  * ADC reading storage: for device detection
  */
@@ -288,6 +311,7 @@ void chassis_error(void);
 void chassis_error(void)
 {
 	display_text(IDX_ERROR);
+	print_ecdbg("Chassis error...shutting down.\r\n");
 	
 	while(1); //catastrophic error, just hang TODO: allow technician interface to work here possibly
 	
@@ -347,6 +371,17 @@ enum {
 	LED_BRD_4_TOP	//shelf 3
 };
 
+
+void print_ecdbg_num(unsigned char num);
+void print_ecdbg_num(unsigned char num)
+{
+	char str[3];
+	
+	sprintf(str, "%d", num);	
+	
+	print_ecdbg(str);
+}
+
 /* One serial ID chip per board */
 void read_led_board_serial_ids(void);
 void read_led_board_serial_ids(void)
@@ -357,32 +392,40 @@ void read_led_board_serial_ids(void)
 	
 	SetSpeed(1); //1==standard speed, not overdrive 
 	
-	ledBrd[0].present = !OWTouchReset(0);
-	ledBrd[1].present = !OWTouchReset(1);
-	ledBrd[2].present = !OWTouchReset(2);
-	ledBrd[3].present = !OWTouchReset(3);
-	ledBrd[4].present = !OWTouchReset(4);
+	for (int i=0; i<NUM_LED_BOARDS; i++)
+	{
+		ledBrd[i].present = !OWTouchReset(i);
+		if (ledBrd[i].present)
+		{
+			print_ecdbg("LED board detected in slot ");
+			print_ecdbg_num(i);
+			print_ecdbg("\r\n");
+		}
+	}
 	
 	if (ledBrd[0].present && ledBrd[1].present)
 	{
 		shelf[0].present = 1;
+		
+		print_ecdbg("Shelf 0 present\r\n");
 	}
 	if (ledBrd[1].present && ledBrd[2].present)
 	{
 		shelf[1].present = 1;
+		print_ecdbg("Shelf 1 present\r\n");
 	}
 	if (ledBrd[2].present && ledBrd[3].present)
 	{
 		shelf[2].present = 1;
+		print_ecdbg("Shelf 2 present\r\n");
 	}
 	if (ledBrd[3].present && ledBrd[4].present)
 	{
 		shelf[3].present = 1;
+		print_ecdbg("Shelf 3 present\r\n");
 	}
 	
 
-//for (;;) //DEBUG 12may15
-//{
 	for (int i=0; i<NUM_LED_BOARDS; i++)
 	{
 		unsigned char acc = 0;
@@ -405,28 +448,12 @@ void read_led_board_serial_ids(void)
 			
 			if (acc != ledBrd[i].idcsum)
 			{
+				sysErr.ledBrdSerialIdCsum |= BIT(i); //SE_FAIL;
 				ledBrd[i].present = 0; //crc8 wasn't valid for this ID chip, don't trust the board
+				print_ecdbg("Invalid serial ID checksum.\r\n");
 			}
 		}
 	}
-//}//DEBUG 12may15
-	
-	//DEBUG until we fix the reading of the serial chip ID 11may15
-#if 0 //we won't need this if the clock change works	
-	ledBrd[1].id[0] = 0x01;
-	ledBrd[1].id[1] = 0x23;
-	ledBrd[1].id[2] = 0x45;
-	ledBrd[1].id[3] = 0x67;
-	ledBrd[1].id[4] = 0x89;
-	ledBrd[1].id[5] = 0xab;
-
-	ledBrd[2].id[0] = 0xab;
-	ledBrd[2].id[1] = 0x89;
-	ledBrd[2].id[2] = 0x67;
-	ledBrd[2].id[3] = 0x45;
-	ledBrd[2].id[4] = 0x23;
-	ledBrd[2].id[5] = 0x01;
-#endif
 }
 
 /* LEDs we are using are rated for up to 2000 hours */
@@ -442,7 +469,7 @@ unsigned char check_led_brd_side_lifetime(unsigned char sideIdx)
 {
 	unsigned char idx;
 	unsigned int hours;
-	float intensity; //TODO: needs to be float or dealt with differently
+	float intensity;
 	
 	/*
 	 * Find the record for this board's serial ID number, and check the usage hours and see if we
@@ -608,8 +635,81 @@ void check_shelves_for_devices(void)
 	{
 		if (shelf[i].present)
 		{
-			shelf[i].devicesPresent = check_shelf_for_devices(i);	
+			shelf[i].devicesPresent = check_shelf_for_devices(i);
+			
+			if (shelf[i].devicesPresent)
+			{
+				print_ecdbg("Devices detected on shelf ");
+				print_ecdbg_num(i);
+				print_ecdbg("\r\n");
+			}
 		}
+	}
+}
+
+
+void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned char eflag1);
+void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned char eflag1)
+{
+	unsigned char bit;
+	
+	switch (sideSel)
+	{
+		case TOP:
+			print_ecdbg("PCA9952 Error(s) on TOPDRIVE ");
+			
+			for (int i=0; i<8; i++)
+			{
+				bit = (1 << i);
+				if (bit & eflag0)
+				{
+					print_ecdbg_num(i);
+					print_ecdbg(" ");
+					sysErr.topdrive |= BIT(i); //SE_FAIL
+				}
+			}
+			
+			print_ecdbg("\r\n");
+			
+			if (eflag1 != 0)
+			{
+				print_ecdbg("ERROR on unused channels: PCA9952 - Controller board U7\r\n");
+			}
+			
+			break;
+
+		case BOTTOM:
+			print_ecdbg("PCA9952 Error(s) on BOTDRIVE ");
+			
+			for (int i=0; i<8; i++)
+			{
+				bit = (1 << i);
+				if (bit & eflag0)
+				{
+					print_ecdbg_num(i);
+					print_ecdbg(" ");
+					sysErr.botdrive |= BIT(i); //SE_FAIL;
+				}
+			}
+			
+			for (int i=0; i<4; i++)
+			{
+				bit = (1 << i);
+				if (bit & eflag1)
+				{
+					print_ecdbg_num((i+8));
+					print_ecdbg(" ");
+					sysErr.botdrive |= BIT(i+8); //SE_FAIL;
+				}
+			}
+			
+			print_ecdbg("\r\n");
+			
+			if ((eflag1 & 0xF0) != 0)
+			{
+				print_ecdbg("ERROR on unused channels: PCA9952 - Controller board U8\r\n");
+			}
+			break;
 	}
 }
 
@@ -655,6 +755,11 @@ void set_shelves_active_inactive(void)
 			{
 				topEflag0 = PCA9952_read_reg(LED_TOP, PCA9952_EFLAG0);
 				topEflag1 = PCA9952_read_reg(LED_TOP, PCA9952_EFLAG1);
+				
+				if ((topEflag0 != 0) || (topEflag1 != 0))
+				{
+					print_pca9952_errors(TOP, topEflag0, topEflag1);
+				}
 			
 				break; //fault test for LED_TOP strings is complete
 			}
@@ -670,6 +775,11 @@ void set_shelves_active_inactive(void)
 				botEflag0 = PCA9952_read_reg(LED_BOTTOM, PCA9952_EFLAG0);
 				botEflag1 = PCA9952_read_reg(LED_BOTTOM, PCA9952_EFLAG1);
 			
+				if ((botEflag0 != 0) || (botEflag1 != 0))
+				{
+					print_pca9952_errors(BOTTOM, topEflag0, topEflag1);
+				}
+				
 				break; //fault test for LED_BOTTOM strings is complete
 			}
 		
@@ -924,6 +1034,8 @@ void door_latch_open_kill_all_shelves(void)
 	led_shelf(1, LED_OFF);
 	led_shelf(2, LED_OFF);
 	led_shelf(3, LED_OFF);
+	
+	print_ecdbg("Door latch opened, kill all shelves for safety.\r\n");
 }
 
 
@@ -1166,6 +1278,10 @@ unsigned char find_first_open_usage_slot(unsigned char sel)
 		}
 	}
 	
+	print_ecdbg("No more room for LED board info. Cannot track minute usage for additional boards.\r\n");
+	
+	sysErr.usageStructsFull = FAIL;
+	
 	return USAGE_FULL; //Error, no open slots
 }
 
@@ -1252,6 +1368,8 @@ void write_usage_to_flash(unsigned char sel)
 	}
 }
 
+
+//TODO: this doesn't seem to work. Should we fix it?
 void write_usage_to_flash_no_erase(unsigned char sel);
 void write_usage_to_flash_no_erase(unsigned char sel)
 {
@@ -1497,6 +1615,7 @@ void init_led_board_info(void)
 	
 	if (usage0good)
 	{
+		print_ecdbg("Flash usage area 0 good.\r\n");
 		load_usage_indeces(0);
 	}
 	else
@@ -1511,6 +1630,7 @@ void init_led_board_info(void)
 	
 	if (usage1good)
 	{
+		print_ecdbg("Flash usage area 1 good.\r\n");
 		load_usage_indeces(1);
 	}
 	else
@@ -1527,10 +1647,14 @@ void init_led_board_info(void)
 	{
 		if (test_flash(0) == ERROR)
 		{
+			print_ecdbg("Flash usage area 0 ERROR.\r\n");
+			sysErr.flashArea |= BIT(0); //SE_FAIL;
 			chassis_error();
 		}
 		if (test_flash(1) == ERROR)
 		{
+			print_ecdbg("Flash usage area 1 ERROR.\r\n");
+			sysErr.flashArea|= BIT(1); //SE_FAIL;
 			chassis_error();
 		}
 		add_new_led_board_sides_to_usage(0);
@@ -1560,6 +1684,10 @@ void init_led_board_info(void)
 		
 		if (test_flash(older) == ERROR)
 		{
+			print_ecdbg("Flash usage area ");
+			print_ecdbg_num(older);
+			print_ecdbg(" ERROR.\r\n");
+			sysErr.flashArea|= BIT(older); //SE_FAIL;
 			chassis_error();
 		}
 
@@ -1571,6 +1699,10 @@ void init_led_board_info(void)
 		write_usage_to_flash(previouslyOlder);
 		if (test_flash(newer) == ERROR)
 		{
+			print_ecdbg("Flash usage area ");
+			print_ecdbg_num(newer);
+			print_ecdbg(" ERROR.\r\n");
+			sysErr.flashArea |= BIT(newer); //SE_FAIL;
 			chassis_error();
 		}
 
@@ -1593,6 +1725,10 @@ void init_led_board_info(void)
 		
 		if (test_flash(bad) == ERROR)
 		{
+			print_ecdbg("Flash usage area ");
+			print_ecdbg_num(bad);
+			print_ecdbg(" ERROR.\r\n");
+			sysErr.flashArea |= BIT(bad); //SE_FAIL;
 			chassis_error();
 		}
 		
@@ -1604,6 +1740,10 @@ void init_led_board_info(void)
 		write_usage_to_flash(previouslyBad);
 		if (test_flash(good) == ERROR)
 		{
+			print_ecdbg("Flash usage area ");
+			print_ecdbg_num(good);
+			print_ecdbg(" ERROR.\r\n");
+			sysErr.flashArea |= BIT(good); //SE_FAIL;
 			chassis_error();
 		}
 		
@@ -1622,8 +1762,8 @@ void show_chassis_status_info(void)
 	
 	print_ecdbg("\r\n***INSTALLED LED BOARDS***\r\n\r\n");
 	
-	print_ecdbg("SLOT    ID              TOP HRS:MIN    BOT HRS:MIN\r\n");
-	print_ecdbg("--------------------------------------------------\r\n");
+	print_ecdbg("SLOT    ID       UPPER SIDE HRS:MIN    LOWER SIDE HRS:MIN\r\n");
+	print_ecdbg("---------------------------------------------------------\r\n");
 	
 	for (int i=0; i<NUM_LED_BOARDS; i++)
 	{
@@ -1638,7 +1778,7 @@ void show_chassis_status_info(void)
 			uSideMinutes = minute_count(&usageShdw[0].u[uSideUsageIdx].minuteBits[0]);
 			lSideMinutes = minute_count(&usageShdw[0].u[lSideUsageIdx].minuteBits[0]);
 			
-			sprintf(pStr, " %d      %X%X%X%X%X%X         %01d%01d%01d%01d:%02d        %01d%01d%01d%01d:%02d\r\n", 
+			sprintf(pStr, " %d      %X%X%X%X%X%X         %01d%01d%01d%01d:%02d               %01d%01d%01d%01d:%02d\r\n", 
 				i, 
 				ledBrd[i].id[0], ledBrd[i].id[1], ledBrd[i].id[2], ledBrd[i].id[3], ledBrd[i].id[4], ledBrd[i].id[5],
 				usageShdw[0].u[uSideUsageIdx].hrs_thous, usageShdw[0].u[uSideUsageIdx].hrs_huns, usageShdw[0].u[uSideUsageIdx].hrs_tens, usageShdw[0].u[uSideUsageIdx].hrs_ones, uSideMinutes,
@@ -1652,6 +1792,174 @@ void show_chassis_status_info(void)
 }
 
 
+void show_chassis_sysErr(void);
+void show_chassis_sysErr(void)
+{
+	char str[80];
+	
+
+	print_ecdbg("\r\n***SYSTEM TESTS***\r\n\r\n");
+
+
+/*
+ *	LED Driver: Top
+ */
+	sprintf(str, "LED Driver: TOP (7..0)                 ");
+	
+	for (int i=8; i>0; i--)
+	{
+		if ((sysErr.topdrive & BIT(i-1)) == SE_FAIL)
+		{
+			strcat(str,"F ");			
+		}
+		else
+		{
+			strcat(str,"P ");
+		}
+	}
+	
+	print_ecdbg(str);
+	print_ecdbg("\r\n");
+	
+/*
+ *	LED Driver: Bottom
+ */
+	sprintf(str, "LED Driver: BOTTOM (11..0)             ");
+	
+	for (int i=12; i>0; i--)
+	{
+		if ((sysErr.botdrive & BIT(i-1)) == SE_FAIL)
+		{
+			strcat(str,"F ");			
+		}
+		else
+		{
+			strcat(str,"P ");
+		}
+	}
+	
+	print_ecdbg(str);
+	print_ecdbg("\r\n");
+	
+/*
+ *	Flash
+ */
+
+	sprintf(str, "Flash (0..1)                           ");
+	
+	for (int i=0; i<2; i++)
+	{
+		if ((sysErr.flashArea & BIT(i)) == SE_FAIL)
+		{
+			strcat(str, "F ");
+		}
+		else
+		{
+			strcat(str, "P ");
+		}
+	}
+	
+	print_ecdbg(str);
+	print_ecdbg("\r\n");
+	
+/*
+ * LED board serial ID checksums
+ */	
+	sprintf(str, "LED Board Serial ID Checksums (0..4)   ");
+	
+	for (int i=0; i<NUM_LED_BOARDS; i++)
+	{
+		if ((sysErr.ledBrdSerialIdCsum & BIT(i)) == SE_FAIL)
+		{
+			strcat(str, "F ");
+		}
+		else
+		{
+			strcat(str, "P ");
+		}
+	}
+
+	print_ecdbg(str);
+	print_ecdbg("\r\n");
+	
+
+/*
+ * LED Board Side Max Usage Reached
+ */
+	sprintf(str, "LED Board Side Max Usage (0..7)        ");
+	
+	for (int i=0; i<NUM_LED_BOARD_SIDES; i++)
+	{
+		if ((sysErr.ledBrdSideMaxUsage & BIT(i)) == SE_FAIL)
+		{
+			strcat(str, "F ");
+		}
+		else
+		{
+			strcat(str, "P ");
+		}
+	}
+
+	print_ecdbg(str);
+	print_ecdbg("\r\n");
+	
+
+/*
+ * Usage Struct Full
+ */
+
+	sprintf(str, "Usage Struct Open Slots                ");
+	if (sysErr.usageStructsFull == SE_FAIL)
+	{
+		strcat(str, "F \r\n");
+	}
+	else
+	{
+		strcat(str, "P \r\n");
+	}
+	
+	print_ecdbg(str);
+	print_ecdbg("\r\n");
+
+}
+
+void show_chassis_all_LED_boards(void);
+void show_chassis_all_LED_boards(void)
+{
+	char str[80];
+	int i = 0;
+
+	print_ecdbg("\r\n***LED BOARDS MASTER LIST***\r\n\r\n");
+	
+	while(1)
+	{
+		if (usageShdw[0].u[i].slotFilled)
+		{
+			sprintf(str, "%2d) %X%X%X%X%X%X ", i,
+				usageShdw[0].u[i].id[0],usageShdw[0].u[i].id[1],usageShdw[0].u[i].id[2],usageShdw[0].u[i].id[3],usageShdw[0].u[i].id[4],usageShdw[0].u[i].id[5]);
+			
+			if (usageShdw[0].u[i].top_botn)
+			{
+				strcat(str, " TOP\r\n");
+			}
+			else
+			{
+				strcat(str, " BOT\r\n");
+			}
+			
+			print_ecdbg(str);
+		}
+		else
+		{
+			break; //LED boards are stored contiguously, so if we hit a blank spot we are done with the entries in the list
+		}
+		i++;
+		
+	}
+
+}
+
+
 
 unsigned char firstTimeThrough = 1;
 
@@ -1661,44 +1969,33 @@ unsigned char firstTimeThrough = 1;
 int main(void)
 {
 	static unsigned char displayIdx = 0;
-	unsigned long usec = 1000, stayInLoop = 0;
 	
 	// Initialize System Clock
 	init_sys_clocks();
 
 	init_io();
 	
+	init_sysErr();
 
 	init_led_board_info();
 	
-	while (stayInLoop)
-	{
-		gpio_toggle_pin(ECLAVE_DEBUG_LED);
-		cpu_delay_us(usec, EC_CPU_CLOCK_100MHZ);
-	}
-
 	//Set clock to 8MHz. We start at 100MHz to get through the DS2411 LED board serial ID detection. But we don't need to run that fast for remaining operations.
-	
 	osc_enable(OSC_ID_RC8M);
 	osc_wait_ready(OSC_ID_RC8M);
 	sysclk_set_source(SYSCLK_SRC_RC8M);
 	sysclk_set_prescalers(0,0,0,0);
 	pll_disable(0);
 
-	while (stayInLoop)
-	{
-		gpio_toggle_pin(ECLAVE_DEBUG_LED);
-		cpu_delay_us(usec, EC_CPU_CLOCK_FREQ);
-	}
 
 
-
-	// Initialize USART
+	// Initialize USART again after changing the system clock
 	init_ecdbg_rs232(FPBA_HZ);
 	init_display_rs232(FPBA_HZ);
 
 	// Print Startup Message
-	print_ecdbg("\r\nSEAL SHIELD DEMO\r\nCopyright (c) 2015 Technical Solutions Group, Inc.\r\n");
+	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
+	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.001\r\n");
+
 	display_text(IDX_READY);
 	
 	// Initialize ADC for bluesense channels which are used to see if there are any devices (phones, tablets, etc.) on the shelves
@@ -1721,6 +2018,8 @@ int main(void)
 	electroclaveState = STATE_EC_IDLE;
 	
 	show_chassis_status_info();
+	show_chassis_sysErr();
+	show_chassis_all_LED_boards();
 	
 	gpio_set_pin_low(ECLAVE_LED_OEn); //...and we are live!
 	gpio_set_pin_low(ECLAVE_PSUPPLY_ONn); //turn the leds on first and then the power supply
@@ -1729,7 +2028,8 @@ int main(void)
 
 
 	// Main loop
-	while (true) {
+	while (true) 
+	{
 
 		switch(electroclaveState)
 		{
@@ -1908,8 +2208,6 @@ int main(void)
 				if (cpu_is_timeout(&cleanTimer)) {
 					cpu_stop_timeout(&cleanTimer);
 					electroclaveState = STATE_ACTION_PB_RELEASED;	
-					print_ecdbg("Start sanitizing\r\n");
-
 				}
 				break;
 				
