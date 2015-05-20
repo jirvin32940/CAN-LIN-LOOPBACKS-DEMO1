@@ -187,11 +187,7 @@ typedef struct {
 	unsigned char					:1;
 	unsigned char					:1;
 	
-	unsigned char hrs_thous : 4;	/* usage time: kinda BCD */
-	unsigned char hrs_huns	: 4;
-	unsigned char hrs_tens	: 4;
-	unsigned char hrs_ones	: 4;
-	
+	unsigned long minutes;	
 	unsigned char minuteBits[8];	//flip one bit from 1 to 0 each minute, saves us from having to erase flash every minute, we will only need to erase flash once per hour
 	
 } SERIAL_ID_AND_USAGE; //10 bytes each
@@ -373,10 +369,10 @@ enum {
 };
 
 
-void print_ecdbg_num(unsigned char num);
-void print_ecdbg_num(unsigned char num)
+void print_ecdbg_num(unsigned int num);
+void print_ecdbg_num(unsigned int num)
 {
-	char str[3];
+	char str[6];
 	
 	sprintf(str, "%d", num);	
 	
@@ -479,10 +475,11 @@ unsigned char check_led_brd_side_lifetime(unsigned char sideIdx)
 	 */
 	
 	idx = ledBrdSide[sideIdx].ushdwIdx;
-	hours = (usageShdw[0].u[idx].hrs_thous * 1000) +
-		(usageShdw[0].u[idx].hrs_huns * 100) +
-		(usageShdw[0].u[idx].hrs_tens * 10) +
-		(usageShdw[0].u[idx].hrs_ones);
+	hours = (usageShdw[0].u[idx].minutes/60);
+	if ((usageShdw[0].u[idx].minutes %60) > 30)
+	{
+		hours++;
+	}
 		
 
 /*
@@ -718,15 +715,16 @@ unsigned char numActiveShelves;
 
 unsigned char topEflag0 = 0, topEflag1 = 0, botEflag0 = 0, botEflag1 = 0;
 
-void set_shelves_active_inactive(void);
-void set_shelves_active_inactive(void)
+void test_led_driver_channels(void);
+void test_led_driver_channels(void)
 {
 	unsigned char tmp1, tmp2, numShelvesPresent = 0;
+	
 	
 	for (int i=0; i<NUM_SHELVES; i++)
 	{
 		if (shelf[i].present)
-		{	
+		{
 			numShelvesPresent++;
 		}
 	}
@@ -741,17 +739,17 @@ void set_shelves_active_inactive(void)
 		{
 			if (shelf[i].present)
 			{
-				led_shelf(i, LED_ON);	
+				led_shelf(i, LED_ON);
 			}
 		}
 
 		PCA9952_write_reg(LED_TOP, PCA9952_MODE2, 0x40); //starts fault test
 		PCA9952_write_reg(LED_BOTTOM, PCA9952_MODE2, 0x40); //starts fault test
-	
+		
 		while (1)
 		{
 			tmp1 = PCA9952_read_reg(LED_TOP, PCA9952_MODE2);
-		
+			
 			if ((tmp1 & 0x40) == 0)
 			{
 				topEflag0 = PCA9952_read_reg(LED_TOP, PCA9952_EFLAG0);
@@ -761,21 +759,21 @@ void set_shelves_active_inactive(void)
 				{
 					print_pca9952_errors(TOP, topEflag0, topEflag1);
 				}
-			
+				
 				break; //fault test for LED_TOP strings is complete
 			}
-		
+			
 		}
-	
+		
 		while (1)
 		{
 			tmp2 = PCA9952_read_reg(LED_BOTTOM, PCA9952_MODE2);
-		
+			
 			if ((tmp2 & 0x40) == 0)
 			{
 				botEflag0 = PCA9952_read_reg(LED_BOTTOM, PCA9952_EFLAG0);
 				botEflag1 = PCA9952_read_reg(LED_BOTTOM, PCA9952_EFLAG1);
-			
+				
 				if ((botEflag0 != 0) || (botEflag1 != 0))
 				{
 					print_pca9952_errors(BOTTOM, botEflag0, botEflag1);
@@ -783,11 +781,9 @@ void set_shelves_active_inactive(void)
 				
 				break; //fault test for LED_BOTTOM strings is complete
 			}
-		
+			
 		}
 		
-		//TODO: Deal with the errors from the above tests, topEflag0, topEflag1, botEflag0, botEflag1. Report on the technician interface.
-	
 		for (int i=0; i<NUM_SHELVES; i++)
 		{
 			led_shelf(i, LED_OFF);
@@ -796,14 +792,17 @@ void set_shelves_active_inactive(void)
 		//Put driver current back to full power
 		PCA9952_write_reg(LED_TOP, PCA9952_IREFALL, LED_DRIVER_CURRENT);
 		PCA9952_write_reg(LED_BOTTOM, PCA9952_IREFALL, LED_DRIVER_CURRENT);
-
 	}
+	
+	sysErr.topdrive = topEflag0;
+	sysErr.botdrive = (botEflag1 << 8) | botEflag0;
+}
 
+void set_shelves_active_inactive(void);
+void set_shelves_active_inactive(void)
+{
 
-
-	/*
-	 * Continuing the evaluation
-	 */
+	test_led_driver_channels();
 	
 	numActiveShelves = 0;
 	
@@ -1326,10 +1325,7 @@ unsigned char calc_usage_csum(unsigned char sel)
 
 	for (unsigned char i=0; i<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); i++)
 	{
-		csum += usageShdw[sel].u[i].hrs_thous;
-		csum += usageShdw[sel].u[i].hrs_huns;
-		csum += usageShdw[sel].u[i].hrs_tens;
-		csum += usageShdw[sel].u[i].hrs_ones;
+		csum += usageShdw[sel].u[i].minutes;
 		
 // We are not including minuteBits in the structure checksum on purpose since we are updating minuteBits every minute, but only writing the whole structure to flash once per hour
 //		for (int j=0; j<8; j++)
@@ -1391,14 +1387,8 @@ void write_usage_to_flash_no_erase(unsigned char sel)
 unsigned long calc_usage_current_led_boards(unsigned char sel);
 unsigned long calc_usage_current_led_boards(unsigned char sel)
 {
-	unsigned long hrs_thous = 0, 
-		hrs_huns = 0, 
-		hrs_tens = 0, 
-		hrs_ones = 0, 
-		minutes = 0; 
-		
+	unsigned long minutes = 0; 
 	unsigned char idx;
-	unsigned long retMinutes;
 	
 	for (unsigned char i=0; i<NUM_LED_BOARD_SIDES; i++)
 	{
@@ -1406,20 +1396,13 @@ unsigned long calc_usage_current_led_boards(unsigned char sel)
 		{
 			idx = usageIdx[sel][i];
 					
-			hrs_thous += usageShdw[sel].u[idx].hrs_thous;
-			hrs_huns += usageShdw[sel].u[idx].hrs_huns;
-			hrs_tens += usageShdw[sel].u[idx].hrs_tens;
-			hrs_ones += usageShdw[sel].u[idx].hrs_ones;
+			minutes += usageShdw[sel].u[idx].minutes;
 			
-			minutes += minute_count(&usageShdw[sel].u[idx].minuteBits[0]);
+//TODO: come back to this if we fix the flash with no erase problem			minutes += minute_count(&usageShdw[sel].u[idx].minuteBits[0]);
 		}
 	}
 	
-	retMinutes = (hrs_thous * 1000) + (hrs_huns * 100) + (hrs_tens * 10) + (hrs_ones);
-	retMinutes *= 60;
-	retMinutes += minutes;
-	
-	return retMinutes;
+	return minutes;
 }
 
 void increment_ledBoard_usage_min(void);
@@ -1444,6 +1427,8 @@ void increment_ledBoard_usage_min(void)
 		
 			for (unsigned char j=0; j<2; j++) //for each copy of usageShdw[] (update both copies every time even though we only write one to flash each time)
 			{
+				usageShdw[j].totalSanitationMinutes++;
+
 				for (unsigned char k=0; k<2; k++) //for each board side in the shelf
 				{
 					switch (k)
@@ -1456,35 +1441,21 @@ void increment_ledBoard_usage_min(void)
 							break;
 					}
 
-					if (inc_minutes(tmp->minuteBits) > 59)
+					tmp->minutes = tmp->minutes + 1;
+					if ((tmp->minutes %60) == 0)
 					{
-						reset_minutes(tmp->minuteBits);
+//TODO: come back to this if we fix the flash no erase problem						reset_minutes(tmp->minuteBits);
 
 						if (j == hourPingPong)
 						{
 							hourRollover++; //count number of board sides that had hours rollover this pass for the current hourPingPong selection
 						}
 					
-						if (++(tmp->hrs_ones) > 9)
+						if (tmp->minutes >= (2000 * 60)) //2000 hours * 60 minutes per hour
 						{
-							tmp->hrs_ones = 0;
-						
-							if (++(tmp->hrs_tens) > 9)
-							{
-								tmp->hrs_tens = 0;
-							
-								if (++(tmp->hrs_huns) > 9)
-								{
-									tmp->hrs_huns = 0;
-								
-									if (++(tmp->hrs_thous) > 1)
-									{
-										tmp->maxUsageReached = 1; //And...we're done. Reached 2000 hours.
-									} //hrs_thous
-								} //hrs_huns
-							} //hrs_tens 
-						} //hrs_ones
-					} //minuteBits
+							tmp->maxUsageReached = 1; //And...we're done. Reached 2000 hours.
+						}
+					}//if ((tmp->minutes %60) == 0)
 				} //for each board side in the shelf (k)
 			} //for each copy of usageShdw
 		} //if (shelf[i].active)
@@ -1762,8 +1733,8 @@ void show_chassis_status_info(void);
 void show_chassis_status_info(void)
 {
 	char pStr[80];
-	unsigned char uSideIdx, lSideIdx, uSideUsageIdx, lSideUsageIdx, uSideMinutes, lSideMinutes;
-	unsigned char sanMinutesMax = 0, sanMinutesMin = 0xFF, sanMinutesUpper, sanMinutesLower, uHrs_thous, uHrs_huns, uHrs_tens, uHrs_ones, lHrs_thous, lHrs_huns, lHrs_tens, lHrs_ones;
+	unsigned char uSideIdx, lSideIdx, uSideUsageIdx, lSideUsageIdx;
+	unsigned char sanMinutesMax = 0, sanMinutesMin = 0xFF, sanMinutesUpper, sanMinutesLower, uHrs, uMins, lHrs, lMins;
 	
 	print_ecdbg("\r\n***INSTALLED LED BOARDS***\r\n\r\n");
 	
@@ -1781,52 +1752,40 @@ void show_chassis_status_info(void)
 			if (uSideIdx != NO_LED_BOARD_PRESENT)
 			{
 				uSideUsageIdx = ledBrdSide[uSideIdx].ushdwIdx;	
-				uSideMinutes = minute_count(&usageShdw[0].u[uSideUsageIdx].minuteBits[0]);
 				check_led_brd_side_lifetime(uSideIdx);
 				sanMinutesUpper = ledBrdSide[uSideIdx].sanitizeMinutes;
-				uHrs_thous = usageShdw[0].u[uSideUsageIdx].hrs_thous;
-				uHrs_huns = usageShdw[0].u[uSideUsageIdx].hrs_huns;
-				uHrs_tens = usageShdw[0].u[uSideUsageIdx].hrs_tens;
-				uHrs_ones = usageShdw[0].u[uSideUsageIdx].hrs_ones;
+				uHrs = usageShdw[0].u[uSideUsageIdx].minutes/60;
+				uMins = usageShdw[0].u[uSideUsageIdx].minutes%60;
 			}
 			else
 			{
-				uHrs_thous = 0;
-				uHrs_huns = 0;
-				uHrs_tens = 0;
-				uHrs_ones = 0;
-				uSideMinutes = 0;
+				uHrs = 0;
+				uMins = 0;
 				sanMinutesUpper = 0;
 			}
 			
 			if (lSideIdx != NO_LED_BOARD_PRESENT)
 			{
 				lSideUsageIdx = ledBrdSide[lSideIdx].ushdwIdx;	
-				lSideMinutes = minute_count(&usageShdw[0].u[lSideUsageIdx].minuteBits[0]);
 				check_led_brd_side_lifetime(lSideIdx);
 				sanMinutesLower = ledBrdSide[lSideIdx].sanitizeMinutes;
-				lHrs_thous = usageShdw[0].u[lSideUsageIdx].hrs_thous;
-				lHrs_huns = usageShdw[0].u[lSideUsageIdx].hrs_huns;
-				lHrs_tens = usageShdw[0].u[lSideUsageIdx].hrs_tens;
-				lHrs_ones = usageShdw[0].u[lSideUsageIdx].hrs_ones;
+				lHrs = usageShdw[0].u[lSideUsageIdx].minutes/60;
+				lMins = usageShdw[0].u[lSideUsageIdx].minutes%60;
 			}
 			else
 			{
-				lHrs_thous = 0;
-				lHrs_huns = 0;
-				lHrs_tens = 0;
-				lHrs_ones = 0;
-				lSideMinutes = 0;
+				lHrs = 0;
+				lMins = 0;
 				sanMinutesLower = 0;
 			} 
 			
 			
-			sprintf(pStr, " %d      %X%X%X%X%X%X %01d%01d%01d%01d:%02d     %02d       %01d%01d%01d%01d:%02d     %02d\r\n", 
+			sprintf(pStr, " %d      %X%X%X%X%X%X %04d:%02d     %02d       %04d:%02d     %02d\r\n", 
 				i, 
 				ledBrd[i].id[0], ledBrd[i].id[1], ledBrd[i].id[2], ledBrd[i].id[3], ledBrd[i].id[4], ledBrd[i].id[5],
-				uHrs_thous, uHrs_huns, uHrs_tens, uHrs_ones, uSideMinutes,
+				uHrs, uMins,
 				sanMinutesUpper,
-				lHrs_thous, lHrs_huns, lHrs_tens, lHrs_ones, lSideMinutes,
+				lHrs, lMins,
 				sanMinutesLower);
 			print_ecdbg(pStr);
 			
@@ -1860,7 +1819,14 @@ void show_chassis_status_info(void)
 	print_ecdbg("\r\n");
 	
 	print_ecdbg("TOTAL SANITIZE HOURS: ");
-	print_ecdbg_num(usageShdw[0].totalSanitationMinutes/24);
+	if ((usageShdw[0].totalSanitationMinutes%60) > 30)
+	{
+		print_ecdbg_num((usageShdw[0].totalSanitationMinutes/60)+1);
+	}
+	else
+	{
+		print_ecdbg_num(usageShdw[0].totalSanitationMinutes/60);
+	}
 	print_ecdbg(" TOTAL SANITIZE CYCLES: ");
 	print_ecdbg_num(usageShdw[0].totalSanitationCycles);
 	print_ecdbg("\r\n");
@@ -2072,7 +2038,7 @@ int main(void)
 
 	// Print Startup Message
 	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
-	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.001\r\n");
+	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.002\r\n");
 
 	display_text(IDX_READY);
 	
@@ -2091,7 +2057,10 @@ int main(void)
 	twi_init();
 
 	gpio_set_pin_high(ECLAVE_LED_OEn); //make sure outputs are disabled at the chip level
+
 	PCA9952_init();
+	test_led_driver_channels();
+	
 	
 	electroclaveState = STATE_EC_IDLE;
 	
@@ -2191,8 +2160,6 @@ int main(void)
 				cpu_set_timeout((sanitizeMinutes * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &sanitizeTimer); //DEBUG take this out when done debugging logic, put it back to minutes 11may15
 				usageShdw[0].totalSanitationCycles++;
 				usageShdw[1].totalSanitationCycles++;
-				usageShdw[0].totalSanitationMinutes += sanitizeMinutes;
-				usageShdw[1].totalSanitationMinutes += sanitizeMinutes;
 
 				
 //DEBUG 11may15 do this once per second for debug				cpu_set_timeout((60 * cpu_ms_2_cy(1000,EC_CPU_CLOCK_FREQ)), &oneMinuteTimer); //one minute for the usage statistics
