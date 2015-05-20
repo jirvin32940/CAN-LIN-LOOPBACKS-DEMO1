@@ -91,6 +91,8 @@ unsigned char minute_count(unsigned char * pMinuteBits);
 void reset_minutes(unsigned char * pMinuteBits);
 unsigned char inc_minutes(unsigned char * pMinuteBits);
 
+unsigned char firstTimeThroughDoorLatch = 1;
+unsigned char firstTimeThroughPCA9952 = 1;
 
 
 unsigned char minPingPong; //used to toggle between 2 buffers each minute
@@ -757,7 +759,10 @@ void test_led_driver_channels(void)
 				
 				if ((topEflag0 != 0) || (topEflag1 != 0))
 				{
-					print_pca9952_errors(TOP, topEflag0, topEflag1);
+					if (!firstTimeThroughPCA9952)
+					{
+						print_pca9952_errors(TOP, topEflag0, topEflag1);
+					}
 				}
 				
 				break; //fault test for LED_TOP strings is complete
@@ -776,7 +781,10 @@ void test_led_driver_channels(void)
 				
 				if ((botEflag0 != 0) || (botEflag1 != 0))
 				{
-					print_pca9952_errors(BOTTOM, botEflag0, botEflag1);
+					if (!firstTimeThroughPCA9952)
+					{
+						print_pca9952_errors(BOTTOM, botEflag0, botEflag1);
+					}
 				}
 				
 				break; //fault test for LED_BOTTOM strings is complete
@@ -796,6 +804,7 @@ void test_led_driver_channels(void)
 	
 	sysErr.topdrive = topEflag0;
 	sysErr.botdrive = (botEflag1 << 8) | botEflag0;
+	firstTimeThroughPCA9952 = 0;
 }
 
 void set_shelves_active_inactive(void);
@@ -1415,6 +1424,10 @@ void increment_ledBoard_usage_min(void)
 	unsigned char bottomUIdx;
 	unsigned char hourRollover = 0;
 	
+	usageShdw[0].totalSanitationMinutes++;
+	usageShdw[1].totalSanitationMinutes++;
+
+
 	for (unsigned char i=0; i<NUM_SHELVES; i++) //check every active shelf
 	{
 		if (shelf[i].active == SHELF_ACTIVE)
@@ -1427,8 +1440,6 @@ void increment_ledBoard_usage_min(void)
 		
 			for (unsigned char j=0; j<2; j++) //for each copy of usageShdw[] (update both copies every time even though we only write one to flash each time)
 			{
-				usageShdw[j].totalSanitationMinutes++;
-
 				for (unsigned char k=0; k<2; k++) //for each board side in the shelf
 				{
 					switch (k)
@@ -1850,7 +1861,7 @@ void show_chassis_sysErr(void)
 	
 	for (int i=8; i>0; i--)
 	{
-		if ((sysErr.topdrive & BIT(i-1)) == SE_FAIL)
+		if ((sysErr.topdrive & BIT(i-1)))
 		{
 			strcat(str,"F ");			
 		}
@@ -1870,7 +1881,7 @@ void show_chassis_sysErr(void)
 	
 	for (int i=12; i>0; i--)
 	{
-		if ((sysErr.botdrive & BIT(i-1)) == SE_FAIL)
+		if ((sysErr.botdrive & BIT(i-1)))
 		{
 			strcat(str,"F ");			
 		}
@@ -2005,7 +2016,6 @@ void show_chassis_all_LED_boards(void)
 
 
 
-unsigned char firstTimeThrough = 1;
 
 /*! \brief Main File Section:
  *          - Initialization (CPU, TWI, Usart,...)
@@ -2038,7 +2048,7 @@ int main(void)
 
 	// Print Startup Message
 	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
-	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.002\r\n");
+	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.004\r\n");
 
 	display_text(IDX_READY);
 	
@@ -2087,7 +2097,7 @@ int main(void)
 //					display_text(IDX_CLEAR);
 					display_text(IDX_READY);
 					electroclaveState = STATE_DOOR_LATCHED;
-					firstTimeThrough = 1;
+					firstTimeThroughDoorLatch = 1;
 				}
 				break;
 				
@@ -2276,7 +2286,7 @@ int main(void)
 		 */
 		if (!EC_DOOR_LATCHED) {
 		
-			if (firstTimeThrough)
+			if (firstTimeThroughDoorLatch)
 			{
 				door_latch_open_kill_all_shelves();
 
@@ -2295,7 +2305,7 @@ int main(void)
 
 				electroclaveState = STATE_SHUTDOWN_PROCESSES;
 				print_ecdbg("Door latch opened, shutting down all processes\r\n");
-				firstTimeThrough = 0;
+				firstTimeThroughDoorLatch = 0;
 				
 			}
 		} //if (!EC_DOOR_LATCHED)
