@@ -175,6 +175,9 @@ unsigned char electroclaveState;
 #define LED_BOARD_SIDE_STRUCT_SIZE	10	//bytes
 
 
+#define SERIAL_ID_AND_ALL_USAGE_COMBINED
+#ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
+
 /* Data structure for serial ID and usage info */
 typedef struct {
 	
@@ -204,6 +207,76 @@ typedef struct {
 
 USAGE_SHADOW usageShdw[2];
 
+#else
+
+typedef struct {
+	
+	unsigned int  totalSanitationCycles	: 35;
+	unsigned int						: 1;
+	unsigned int						: 1;
+	unsigned int						: 1;
+	unsigned int						: 1;
+	unsigned int						: 1;
+	unsigned char csum;
+		
+	
+}CHASSIS_SAN_CYCLES;
+
+
+typedef struct {
+	
+	unsigned int totalSanitationMinutes : 44;
+	unsigned int						: 1;
+	unsigned int						: 1;
+	unsigned int						: 1;
+	unsigned int						: 1;
+	unsigned char csum; 
+	
+}CHASSIS_SAN_MINUTES;
+
+
+typedef struct {
+	
+	unsigned char id[6];			//6 bytes - 48 bits
+	
+	unsigned int  hours				: 11;
+	
+	unsigned char top_botn			:1; //top .=. 1, bottom .=. 0 side of the LED board (track them independently)
+	unsigned char maxUsageReached	:1;	//go/no-go flag
+	unsigned char slotFilled		:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	unsigned char					:1;
+	
+} USAGE_SERIAL_ID_AND_HOURS;
+
+typedef struct {
+
+	unsigned long minutes	:6;	
+	unsigned char			:1;
+	unsigned char			:1;
+	unsigned char csum;
+	
+} USAGE_MINS;
+
+
+typedef struct {
+	USAGE_SERIAL_ID_AND_HOURS	idHours[NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES];
+	unsigned char				csum;
+
+} USAGE_ID_HOURS;
+
+typedef struct {
+
+	USAGE_MINS		mins[116];
+	unsigned char	csum;
+	
+} USAGE_MINUTES;
+
+
+#endif
 
 enum {SE_PASS, SE_FAIL};
 
@@ -1749,8 +1822,8 @@ void show_chassis_status_info(void)
 	
 	print_ecdbg("\r\n***INSTALLED LED BOARDS***\r\n\r\n");
 	
-	print_ecdbg(" LED | LED BOARD  |     UPPER SIDE     |     LOWER SIDE  \r\n");
-	print_ecdbg("SLOT |    ID      | HRS:MIN    DTE     | HRS:MIN    DTE  \r\n");
+	print_ecdbg(" LED | LED BOARD  |   UPPER SIDE     |   LOWER SIDE    \r\n");
+	print_ecdbg("SLOT |    ID      | HRS:MIN    DTE   | HRS:MIN    DTE   \r\n");
 	print_ecdbg("--------------------------------------------------------\r\n");
 	
 	for (int i=0; i<NUM_LED_BOARDS; i++)
@@ -1791,7 +1864,7 @@ void show_chassis_status_info(void)
 			} 
 			
 			
-			sprintf(pStr, " %d      %X%X%X%X%X%X %04d:%02d     %02d       %04d:%02d     %02d\r\n", 
+			sprintf(pStr, "%2d     %X%X%X%X%X%X  %04d:%02d     %02d     %04d:%02d     %02d\r\n", 
 				i, 
 				ledBrd[i].id[0], ledBrd[i].id[1], ledBrd[i].id[2], ledBrd[i].id[3], ledBrd[i].id[4], ledBrd[i].id[5],
 				uHrs, uMins,
