@@ -175,7 +175,7 @@ unsigned char electroclaveState;
 #define LED_BOARD_SIDE_STRUCT_SIZE	10	//bytes
 
 
-#define SERIAL_ID_AND_ALL_USAGE_COMBINED
+//this is the old way 24may15 #define SERIAL_ID_AND_ALL_USAGE_COMBINED
 #ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 
 /* Data structure for serial ID and usage info */
@@ -1221,6 +1221,7 @@ void door_latch_open_kill_all_shelves(void)
  */
 
 
+#ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 
 //! NVRAM data structure located in the flash array.
 #if defined (__GNUC__)
@@ -1241,6 +1242,50 @@ static SERIAL_ID_AND_USAGE serialIdAndUsageFlashOne[NUM_SETS_LED_BOARD_SIDES * N
 #endif
 ;
 
+
+#else
+
+
+//! NVRAM data structure located in the flash array.
+#if defined (__GNUC__)
+__attribute__((__section__(".flash_nvram0")))
+#endif
+static CHASSIS_SANITATION_MINUTES sanitationMinutesFlash[NUM_SAN_MIN_BUFS_PER_SECTOR] //TODO: really this should be 58 copies spread out over 2 sectors: how do I do that? Does that matter?
+#if defined (__ICCAVR32__)
+@ "FLASH_NVRAM0"
+#endif
+;
+
+#if defined (__GNUC__)
+__attribute__((__section__(".flash_nvram1")))
+#endif
+static CHASSIS_SANITATION_CYCLES sanitationCyclesFlash[NUM_SAN_CYCLE_BUFS_PER_SECTOR] //TODO: really this should be 4 copies spread out over 2 sectors: how do I do that? Does it matter?
+#if defined (__ICCAVR32__)
+@ "FLASH_NVRAM1"
+#endif
+;
+
+#if defined (__GNUC__)
+__attribute__((__section__(".flash_nvram2")))
+#endif
+static USAGE_SERIAL_ID_AND_HOURS usageSerialIdAndUsageHoursFlash[(NUM_USAGE_HOURS_BUFS_SECTORS/NUM_USAGE_HOURS_SECTORS_PER_BUF)]
+#if defined (__ICCAVR32__)
+@ "FLASH_NVRAM2"
+#endif
+;
+
+#if defined (__GNUC__)
+__attribute__((__section__(".flash_nvram3")))
+#endif
+static USAGE_MINS_SET usageMinutesFlash[NUM_USAGE_MINS_BUFS_SECTORS]
+#if defined (__ICCAVR32__)
+@ "FLASH_NVRAM3"
+#endif
+;
+
+
+
+#endif //SERIAL_ID_AND_ALL_USAGE_COMBINED
 
 unsigned char minute_count(unsigned char * pMinuteBits)
 {
@@ -1572,33 +1617,159 @@ unsigned char calc_region_checksum(unsigned char sel)
 unsigned char eval_region(unsigned char sel);
 unsigned char eval_region(unsigned char sel)
 {
+	CHASSIS_SANITATION_MINUTES		tmpSanm;
+	CHASSIS_SANITATION_CYCLES		tmpSanc;
+	USAGE_SERIAL_ID_AND_HOURS_SET	tmpUsh;
+	USAGE_MINS_SET					tmpUm;
+	
+	unsigned char					csum;
+	unsigned char*					flashOffset;
+	unsigned char					retVal = ERROR;
+	
+	
 	switch (sel)
 	{
 		case 0: //san minutes
+			
+			memset(&tmpSanm, 0x00, sizeof(sanm));
+		
 			for (unsigned int i=0; i<(NUM_SAN_MIN_BUFS_PER_SECTOR * NUM_SAN_MIN_BUFS_SECTORS); i++)
 			{
+				if (i<NUM_SAN_MIN_BUFS_PER_SECTOR)
+				{
+					flashOffset = i*sizeof(sanm);
+				}
+				else
+				{
+					flashOffset = 128 + ((i - NUM_SAN_MIN_BUFS_PER_SECTOR) * sizeof(sanm));
+				}
+				memcpy(&sanm, (sanitationMinutesFlash+flashOffset), sizeof(sanm));
 				
+				csum = calc_region_checksum(0);
+				
+				if (csum == sanm.csum) //checksum is good
+				{
+					retVal = SUCCESS; //we have at least one good copy
+					
+					if (sanm.mins > tmpSanm.mins)
+					{
+						memcpy(&tmpSanm, &sanm, sizeof(sanm));
+						sanMinFlashIdx = i; //this is the new best copy	
+					}
+				}
 			}
 			break;
 		case 1: //san cycles
+
+			memset(&tmpSanc, 0x00, sizeof(sanc));
+
 			for (unsigned int i=0; i<(NUM_SAN_CYCLE_BUFS_PER_SECTOR * NUM_SAN_CYCLE_BUFS_SECTORS); i++)
 			{
+				if (i<NUM_SAN_CYCLE_BUFS_PER_SECTOR)
+				{
+					flashOffset = i*sizeof(sanc);
+				}
+				else
+				{
+					flashOffset = 128 + ((i - NUM_SAN_CYCLE_BUFS_PER_SECTOR) * sizeof(sanc));
+				}
+				memcpy(&sanc, (sanitationCycleFlash+flashOffset), sizeof(sanc));
 				
+				csum = calc_region_checksum(1);
+				
+				if (csum == sanc.csum) //checksum is good
+				{
+					retVal = SUCCESS; //we have at least one good copy
+					
+					if (sanc.cycles > tmpSanc.cycles)
+					{
+						memcpy(&tmpSanc, &sanc, sizeof(sanc));
+						sanCycleFlashIdx = i; //this is the new best copy
+					}
+				}
 			}
 			break;
 		case 2: //usage hours
+			
+			unsigned long tmpHours = 0, uHours = 0;
+			
+			memset(&tmpUsh, 0x00, sizeof(ush));
+
 			for (unsigned int i=0; i<(NUM_USAGE_HOURS_BUFS_SECTORS / NUM_USAGE_HOURS_SECTORS_PER_BUF); i++)
 			{
+				flashOffset = (i * NUM_USAGE_HOURS_SECTORS_PER_BUF * 128);
 				
+				memcpy(&ush, (serialIDandUsageHoursFlash+flashOffset), sizeof(ush));
+				
+				csum = calc_region_checksum(2);
+				
+				if (csum == ush.csum) //checksum is good
+				{
+					retVal = SUCCESS; //we have at least one good copy
+					
+					tmpHours = 0;
+					uHours = 0;
+					
+					for (int i=0; i<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); i++)
+					{
+						if (tmpUsh.u[i].slotFilled)
+						{	
+							tmpHours += tmpUsh.u[i].hours;
+						}
+						
+						if (uHours.u[i].slotFilled)
+						{
+							uHours += ush.u[i].hours;
+						}
+					}
+					
+					if (uHours > tmpHours)
+					{
+						memcpy(&tmpUsh, &ush, sizeof(ush));
+						ushFlashIdx = i; //this is the new best copy
+					}
+				}
 			}
 			break;
 		case 3: //usage minutes
+
+			unsigned long tmpMinutes = 0, uMinutes = 0;
+
+			memset(&tmpUm, 0x00, sizeof(um));
+			
 			for (unsigned int i=0; i<(NUM_USAGE_MINS_BUFS_PER_SECTOR * NUM_USAGE_MINS_BUFS_SECTORS); i++)
 			{
+				flashOffset = (i * NUM_USAGE_HOURS_SECTORS_PER_BUF * 128);
 				
+				memcpy(&um, (usageMinutesFlash+flashOffset), sizeof(um));
+				
+				csum = calc_region_checksum(3);
+				
+				if (csum == um.csum) //checksum is good
+				{
+					retVal = SUCCESS; //we have at least one good copy
+					
+					tmpMinutes = 0;
+					uMinutes = 0;
+					
+					for (int i=0; i<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); i++)
+					{
+						//TODO: I should be checking the ush struct to see if the slot is filled, but i don't have a good way of syncing ush and um right now. In the meantime, just make sure that um.mins[i] is 0 if not used.
+						tmpMinutes += tmpUm.mins[i];
+						uMinutes += um.mins[i];
+					}
+					
+					if (uMinutes > tmpMinutes)
+					{
+						memcpy(&tmpUm, &um, sizeof(um));
+						umFlashIdx = i; //this is the new best copy
+					}
+				}
 			}
 			break;
 	}
+	
+	return retVal;
 }
 
 unsigned char write_region_to_flash(unsigned char sel, unsigned char idx, unsigned char csum);
@@ -1946,6 +2117,8 @@ unsigned long calc_usage_current_led_boards(unsigned char sel)
 }
 
 void increment_ledBoard_usage_min(void);
+
+#ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 void increment_ledBoard_usage_min(void)
 {
 	SERIAL_ID_AND_USAGE *tmp;
@@ -1955,14 +2128,8 @@ void increment_ledBoard_usage_min(void)
 	unsigned char bottomUIdx;
 	unsigned char hourRollover = 0;
 	
-#ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 	usageShdw[0].totalSanitationMinutes++;
 	usageShdw[1].totalSanitationMinutes++;
-#else
-
-	inc_sanMins();
-
-#endif //SERIAL_ID_AND_ALL_USAGE_COMBINED	
 
 
 	for (unsigned char i=0; i<NUM_SHELVES; i++) //check every active shelf
@@ -1975,30 +2142,18 @@ void increment_ledBoard_usage_min(void)
 			topUIdx = ledBrdSide[topLEDboardLowerSideIdx].ushdwIdx;
 			bottomUIdx = ledBrdSide[bottomLEDboardUpperSideIdx].ushdwIdx;
 		
-#ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 			for (unsigned char j=0; j<2; j++) //for each copy of usageShdw[] (update both copies every time even though we only write one to flash each time)
 			{
-#endif //SERIAL_ID_AND_ALL_USAGE_COMBINED				
 				for (unsigned char k=0; k<2; k++) //for each board side in the shelf
 				{
 					switch (k)
 					{
-#ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 						case 0:
 							tmp = &usageShdw[j].u[topUIdx];
 							break;
 						case 1:
 							tmp = &usageShdw[j].u[bottomUIdx];
 							break;
-#else
-						case 0:
-							tmp = &ush.u[topUIdx];
-							break;
-						case 1:
-							tmp = &ush.u[bottomUIdx];
-							break;
-
-#endif //SERIAL_ID_AND_ALL_USAGE_COMBINED							
 					}
 
 					tmp->minutes = tmp->minutes + 1;
@@ -2017,20 +2172,13 @@ void increment_ledBoard_usage_min(void)
 						}
 					}//if ((tmp->minutes %60) == 0)
 				} //for each board side in the shelf (k)
-#ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 			} //for each copy of usageShdw
-#endif //SERIAL_ID_AND_ALL_USAGE_COMBINED
-			
 		} //if (shelf[i].active)
 	} //for (i=0; i<NUM_SHELVES; i++)
 	
 	if (hourRollover)
 	{
-#ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 		usageShdw[hourPingPong].csum = calc_usage_csum(hourPingPong);
-#else
-		ush.csum = calc_usage_csum(hourPingPong);
-#endif //SERIAL_ID_AND_ALL_USAGE_COMBINED		
 		write_usage_to_flash(hourPingPong);
 		hourRollover = 0; //reset for next pass
 		hourPingPong++;
@@ -2044,6 +2192,105 @@ void increment_ledBoard_usage_min(void)
 	minPingPong++;
 	minPingPong &= 1; //toggle between 0 (EVEN) and 1 (ODD)
 }
+
+#else
+
+void inc_sanMins(void);
+void inc_sanMins(void)
+{
+	sanm.csum = calc_region_checksum(0);
+	write_region_to_flash(0, 0xFF, sanm.csum);
+	if (++sanMinFlashIdx > (NUM_SAN_MIN_BUFS_PER_SECTOR * NUM_SAN_MIN_BUFS_SECTORS))
+	{
+		sanMinFlashIdx = 0;
+	}
+}
+
+void inc_sanCycles(void);
+void inc_sanCycles(void)
+{
+	sanc.csum = calc_region_checksum(1);
+	write_region_to_flash(1, 0xFF, sanc.csum);
+	if (++sanCycleFlashIdx > (NUM_SAN_CYCLE_BUFS_PER_SECTOR * NUM_SAN_CYCLE_BUFS_SECTORS))
+	{
+		sanCycleFlashIdx = 0;
+	}
+}
+
+
+void increment_ledBoard_usage_min(void)
+{
+	unsigned char idx;
+	unsigned char topLEDboardLowerSideIdx;
+	unsigned char bottomLEDboardUpperSideIdx;
+	unsigned char topUIdx;
+	unsigned char bottomUIdx;
+	unsigned char hourRollover = 0;
+	
+	inc_sanMins();
+
+	for (unsigned char i=0; i<NUM_SHELVES; i++) //check every active shelf
+	{
+		if (shelf[i].active == SHELF_ACTIVE)
+		{
+			topLEDboardLowerSideIdx = ledBrd[shelf[i].tLedIdx].lSideIdx;
+			bottomLEDboardUpperSideIdx = ledBrd[shelf[i].bLedIdx].uSideIdx;
+			
+			topUIdx = ledBrdSide[topLEDboardLowerSideIdx].ushdwIdx;
+			bottomUIdx = ledBrdSide[bottomLEDboardUpperSideIdx].ushdwIdx;
+			
+			for (unsigned char k=0; k<2; k++) //for each board side in the shelf
+			{
+				switch (k)
+				{
+					case 0:
+						idx = topUIdx;
+						break;
+					case 1:
+						idx = bottomUIdx;
+						break;
+
+				}
+
+				um.mins[idx] = um.mins[idx] + 1;
+				if (((um.mins[idx]) %60) == 0)
+				{
+					hourRollover++; //count number of board sides that had hours rollover this pass for the current hourPingPong selection
+					ush.u[idx].hours = ush.u[idx].hours + 1;
+						
+					if ((ush.u[idx].hours) >= 2000) //2000 hours * 60 minutes per hour
+					{
+						ush.u[idx].maxUsageReached = 1; //And...we're done. Reached 2000 hours.
+					}
+				}//if ((minutes %60) == 0)
+			} //for each board side in the shelf (k)
+		} //if (shelf[i].active)
+	} //for (i=0; i<NUM_SHELVES; i++)
+	
+
+	um.csum = calc_region_checksum(3);
+	write_region_to_flash(3, 0xFF, um.csum);
+	if (++umFlashIdx > NUM_USAGE_MINS_BUFS_SECTORS)
+	{
+		umFlashIdx = 0;
+	}
+
+	if (hourRollover)
+	{
+		ush.csum = calc_region_csum(2);
+		write_region_to_flash(2, 0xFF, ush.csum);
+		if (++ushFlashIdx > (NUM_USAGE_HOURS_BUFS_SECTORS/NUM_USAGE_HOURS_SECTORS_PER_BUF))
+		{
+			ushFlashIdx = 0;
+		}
+
+		hourRollover = 0; //reset for next pass
+	}
+}
+
+
+
+#endif //SERIAL_ID_AND_ALL_USAGE_COMBINED
 
 
 void init_shelf_n_ledBrd_structs(void);
