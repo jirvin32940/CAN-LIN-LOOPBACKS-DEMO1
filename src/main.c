@@ -213,22 +213,23 @@ USAGE_SHADOW usageShdw[2];
  * CHASSIS AND BOARD STATISTICS STORED IN FLASH
  *
  * Using the bottom-most flash inside the Atmel processor.
- * Processor flash is organized as 128 byte sectors, rated as 100,000 erase cycles.
+ * Processor flash is organized as 128 byte sectors, and rated for 100,000 erase cycles.
  *
  *	DATA										UPDATE FREQUENCY
  * --------------------------------------------------------------
- * -Chassis sanitation cycles					Incremented on start of each sanitation cycle
- * -Chassis sanitation minutes					Incremented each minute of each sanitation cycle
+ * -Chassis sanitation cycles					Incremented on start of each sanitation cycle.
+ * -Chassis sanitation minutes					Incremented each minute of each sanitation cycle.
  * -Serial ID and usage in hours plus flags		Serial IDs for each LED board logged when a board is plugged into the chassis.
  *												An entry is maintained for the board's top side, and another entry for the bottom side
  *												 *if* the board is not in an outer slot (0 or 4). A board is slot 0 will only have the 
  *												 bottom side tracked, and a board in slot 4 will only have its top side tracked. (If the board
- *												 is later moved to another slot, the second side will also start being tracked.)
+ *												 is later moved to another slot, the second side will also start being tracked at that point.)
  *												Each LED board side's sanitation usage hours are tracked in this structure. This structure
- *												has room for 96 entries: 12 complete sets of 8 LED board sides.
- *												This structure also tracks whether the slot in the structure has been filled, and whether
+ *												has room for 96 entries: 12 complete sets of 8 LED board sides which should be more than enough to  
+												 cover the life of the product.
+ *												This structure also tracks whether this slot in the structure has been filled, and whether
  *												max hour usage (2000 hours) has been reached.
- * -Usage in minutes							Similar structure to the serial ID and usage structure, except here we only track minutes.
+ * -Usage in minutes							Similar structure to the serial ID and usage structure, except here we only track usage minutes.
  *												The reason for breaking them out separately is because there are potentially 96 entries that need
  *												to be updated once per minute, and since there is no guarantee that the minutes will roll over to
  *												hours at the same time for each of the 96 entries, we need to create lots of buffers for this struct
@@ -236,17 +237,14 @@ USAGE_SHADOW usageShdw[2];
  *
  */
 
-
-
-
 /*
  * CHASSIS SANITATION CYCLES
  * 
  * Max value: (96 LED board sides / 2 boards per slot) * 2000 hours max per LED board * 3 cycles max per hour (20 minutes @aging of 0 or 100% intensity) = 288,000 = 0x46500
  * Bits required for max value: 19
- * Number of bits of checksum per entry, rounds up to the nearest byte - 24 - 19 bits = 5 bits for checksum
+ * Number of bits of checksum per entry, rounds up to the nearest byte - 24 - 19 bits = 5 bits for checksum. 24 bits = 3 bytes.
  * Number of buffers required for wear-leveling (100,000 erase cycle flash) - (288,000 / 100,000) =  ~3
- * Need at least 2 sectors in case one is in the middle of an update when the power goes down, so we will do 2 entries per sector
+ * Need at least 2 sectors in case one is in the middle of an update when the power goes down, so we will do 2 entries per sector for a total of 4 entries even though we only need 3.
  *
  */
 
@@ -260,54 +258,99 @@ typedef struct {
 #define NUM_SAN_CYCLE_BUFS_PER_SECTOR	2
 #define NUM_SAN_CYCLE_BUFS_SECTORS		2	//we need at least two sectors so that if one is in the middle of an update when the power goes down another is still in tact
 
+unsigned int chassisSanCycleIdx = 0;
+
+
+/*
+ * CHASSIS SANITATION MINUTES
+ * 
+ * Max value: (96 LED board sides / 2 boards per slot) * 2000 hours max per LED board * 60 minutes per hour = 5,760,000 = 0x57E400
+ * Bits required for max value: 23
+ * Number of bits of checksum per entry, rounds up to the nearest byte - 32 - 23 bits = 9 bits for checksum. 32 bits = 4 bytes.
+ * Number of buffers required for wear-leveling (100,000 erase cycle flash) - (5,760,000 / 100,000) =  ~58
+ * Need at least 2 sectors in case one is in the middle of an update when the power goes down, so we will do 58/2=29 entries per sector.
+ *
+ */
 
 typedef struct {
 	
-	unsigned int	totalSanitationMinutes	: 44;
-	unsigned int	csum					: 3;
+	unsigned int	totalSanitationMinutes	: 23;
+	unsigned int	csum					: 9;
 	
 }CHASSIS_SANITATION_MINUTES;
 
+#define NUM_SAN_MIN_BUFS_PER_SECTOR		29
+#define NUM_SAN_MIN_BUFS_SECTORS		2	//we need at least two sectors so that if one is in the middle of an update when the power goes down another is still in tact
+
+unsigned int chassisSanMinIdx = 0;
+
+
+/*
+ * SERIAL ID PLUS USAGE IN HOURS PLUS FLAGS
+ * 
+ * 96 LED board sides * 62 bit structure =  744 bytes per set = 744 bytes/128 bytes per sector = ~6 sectors per set.
+ * Number of buffers required for wear-leveling (100,000 erase cycle flash) - (96 LED board sides *2000 hours of sanitization / 100,000 erase cycles) =  ~2 sets => 2 sets * 6 sectors = 12 sectors.
+ *
+ */
 
 typedef struct {
 	
-	unsigned char id[6];			//6 bytes - 48 bits
+	unsigned char id[6];					//6 bytes - 48 bits
 
 	unsigned int  hours				: 11;
 	
-	unsigned char top_botn			:1; //top .=. 1, bottom .=. 0 side of the LED board (track them independently)
-	unsigned char maxUsageReached	:1;	//go/no-go flag
-	unsigned char slotFilled		:1;
-	unsigned char					:1;
-	unsigned char					:1;
-	unsigned char					:1;
-	unsigned char					:1;
-	unsigned char					:1;
+	unsigned int top_botn			: 1;	//top .=. 1, bottom .=. 0 side of the LED board (track them independently)
+	unsigned int maxUsageReached	: 1;	//go/no-go flag
+	unsigned int slotFilled			: 1;
+	unsigned int					: 1;
+	unsigned int					: 1;
 	
 } USAGE_SERIAL_ID_AND_HOURS;
 
+typedef struct  
+{
+	USAGE_SERIAL_ID_AND_HOURS	uhrs[(NUM_LED_BOARD_SIDES * NUM_SETS_LED_BOARD_SIDES)];
+	unsigned char				csum;
+}USAGE_SERIAL_ID_AND_HOURS_SET;
+
+USAGE_SERIAL_ID_AND_HOURS_SET uHrsSet;
+
+#define NUM_USAGE_HOURS_SECTORS_PER_BUF		6
+#define NUM_USAGE_HOURS_BUFS_SECTORS		12
+
+unsigned int usageHrIdx = 0;
+
+
+
+/*
+ * USAGE MINUTES
+ * 
+ * 96 LED board sides * 6 bit structure  + 2 bit checksum =  96 bytes per set = 96/128 bytes per sector = ~1 sectors per set.
+ * Number of buffers required for wear-leveling (100,000 erase cycle flash) - (96 LED board sides *2000 hours of sanitization * 60 minutes/hour / 100,000 erase cycles) =  116 sets = 116 sectors.
+ *
+ */
+
+
 typedef struct {
 
-	unsigned long minutes	:6;	
-	unsigned char			:1;
-	unsigned char			:1;
-	unsigned char csum;
+	unsigned char minutes	:6;	
+	unsigned char csum		:2;
 	
 } USAGE_MINS;
 
+typedef struct  
+{
+	USAGE_MINS uMins[(NUM_LED_BOARD_SIDES * NUM_SETS_LED_BOARD_SIDES)];
+} USAGE_MINS_SET;
 
-typedef struct {
-	USAGE_SERIAL_ID_AND_HOURS	idHours[NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES];
-	unsigned char				csum;
+USAGE_MINS_SET uMinsSet;
 
-} USAGE_ID_HOURS;
+#define NUM_USAGE_MINS_BUFS_PER_SECTOR		1
+#define NUM_USAGE_HOURS_BUFS_SECTORS		116
 
-typedef struct {
+unsigned int usageMinIdx = 0;
 
-	USAGE_MINS		mins[116];
-	unsigned char	csum;
-	
-} USAGE_MINUTES;
+
 
 
 #endif //old or new SERIAL_ID_AND_USAGE scheme
@@ -2240,7 +2283,7 @@ int main(void)
 				}
 				else {
 					electroclaveState = STATE_START_CLEAN;
-					print_ecdbg("No shelves, no devices or shelves are past lifetime, charging devices\r\n");
+					print_ecdbg("No shelves, no devices or shelves are past lifetime\r\n");
 //					display_text(IDX_CLEAR);
 					display_text(IDX_READY);
 				}
