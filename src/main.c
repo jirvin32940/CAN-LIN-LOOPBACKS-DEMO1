@@ -1914,7 +1914,7 @@ void show_chassis_status_info(void)
 			if (uSideIdx != NO_LED_BOARD_PRESENT)
 			{
 				uSideUsageIdx = ledBrdSide[uSideIdx].ushdwIdx;	
-				check_led_brd_side_lifetime(uSideIdx);
+				ledBrdSide[uSideIdx].maxUsageReached = !check_led_brd_side_lifetime(uSideIdx);
 				sanMinutesUpper = ledBrdSide[uSideIdx].sanitizeMinutes;
 				uHrs = usageShdw[0].u[uSideUsageIdx].minutes/60;
 				uMins = usageShdw[0].u[uSideUsageIdx].minutes%60;
@@ -1929,7 +1929,7 @@ void show_chassis_status_info(void)
 			if (lSideIdx != NO_LED_BOARD_PRESENT)
 			{
 				lSideUsageIdx = ledBrdSide[lSideIdx].ushdwIdx;	
-				check_led_brd_side_lifetime(lSideIdx);
+				ledBrdSide[uSideIdx].maxUsageReached = !check_led_brd_side_lifetime(lSideIdx);
 				sanMinutesLower = ledBrdSide[lSideIdx].sanitizeMinutes;
 				lHrs = usageShdw[0].u[lSideUsageIdx].minutes/60;
 				lMins = usageShdw[0].u[lSideUsageIdx].minutes%60;
@@ -2094,7 +2094,7 @@ void show_chassis_sysErr(void)
 	
 	for (int i=0; i<NUM_LED_BOARD_SIDES; i++)
 	{
-		if ((sysErr.ledBrdSideMaxUsage & BIT(i)) == SE_FAIL)
+		if ((ledBrdSide[i].maxUsageReached)
 		{
 			strcat(str, "F ");
 		}
@@ -2199,7 +2199,7 @@ int main(void)
 
 	// Print Startup Message
 	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
-	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.004\r\n");
+	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.005\r\n");
 
 	display_text(IDX_READY);
 	
