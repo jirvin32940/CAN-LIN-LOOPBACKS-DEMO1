@@ -74,6 +74,8 @@ PHDRS
   HRAM0 PT_NULL;
   FLASH_NVRAM0 PT_LOAD;
   FLASH_NVRAM1 PT_LOAD;
+  FLASH_NVRAM2 PT_LOAD;
+  FLASH_NVRAM3 PT_LOAD;
   USERPAGE PT_LOAD;
 }
 
@@ -91,6 +93,10 @@ SECTIONS
 
   /* Use a default flash NVRAM size if flash NVRAM size was not defined. */
   __flash_nvram_size__ = DEFINED(__flash_nvram_size__) ? __flash_nvram_size__ : 2K; /* 2may15 */
+  __flash0_nvram_size__ = DEFINED(__flash0_nvram_size__) ? __flash0_nvram_size__ : 256;			/* sanitation minutes	24may15 */
+  __flash1_nvram_size__ = DEFINED(__flash1_nvram_size__) ? __flash1_nvram_size__ : 256;			/* sanitation cycles	24may15 */
+  __flash2_nvram_size__ = DEFINED(__flash2_nvram_size__) ? __flash2_nvram_size__ : (12*128);	/* usage hours			24may15 */
+  __flash3_nvram_size__ = DEFINED(__flash3_nvram_size__) ? __flash3_nvram_size__ : (116*128);	/* usage minutes		24may15 */
 
 
   /* Read-only sections, merged into text segment: */
@@ -299,15 +305,25 @@ SECTIONS
     *(.bss_hram0)
     PROVIDE(_bss_hram0_end = .);
   } >HRAM0 AT>HRAM0 :HRAM0
-  .flash_nvram0   ORIGIN(FLASH) + LENGTH(FLASH) - __flash_nvram_size__ - __flash_nvram_size__ (NOLOAD):  /* 2may15: buffer updated every other minute */
-  {
-    *(.flash_nvram0)
-  } >FLASH AT>FLASH :FLASH_NVRAM0
+   .flash_nvram0   ORIGIN(FLASH) + LENGTH(FLASH) - __flash0_nvram_size__ (NOLOAD):  /* 24may15: sanitation minutes */
+   {
+     *(.flash_nvram0)
+   } >FLASH AT>FLASH :FLASH_NVRAM0
 
-  .flash_nvram1   ORIGIN(FLASH) + LENGTH(FLASH) - __flash_nvram_size__ (NOLOAD):  /* 2may15: buffer updated on alternate minutes */
+  .flash_nvram1   ORIGIN(FLASH) + LENGTH(FLASH) - (__flash0_nvram_size__ + __flash1_nvram_size__) (NOLOAD):  /* 24may15: sanitation cycles */
   {
     *(.flash_nvram1)
   } >FLASH AT>FLASH :FLASH_NVRAM1
+
+  .flash_nvram2   ORIGIN(FLASH) + LENGTH(FLASH) - (__flash0_nvram_size__ + __flash1_nvram_size__ + __flash2_nvram_size__) (NOLOAD):  /* 24may15: usage hours */
+  {
+    *(.flash_nvram2)
+  } >FLASH AT>FLASH :FLASH_NVRAM2
+
+  .flash_nvram3   ORIGIN(FLASH) + LENGTH(FLASH) - (__flash0_nvram_size__ + __flash1_nvram_size + __flash2_nvram_size__ + __flash3_nvram_size__) (NOLOAD):  /* 24may15: usage minutes */
+  {
+    *(.flash_nvram3)
+  } >FLASH AT>FLASH :FLASH_NVRAM3
 
 
   .userpage       : { *(.userpage .userpage.*) } >USERPAGE AT>USERPAGE :USERPAGE
