@@ -250,15 +250,17 @@ USAGE_SHADOW usageShdw[2];
 
 typedef struct {
 	
-	unsigned int	totalSanitationCycles	: 19;
-	unsigned int	csum					: 5;
+	unsigned int	cycles	: 19;
+	unsigned int	csum	: 5;
 	
 }CHASSIS_SANITATION_CYCLES;
+
+CHASSIS_SANITATION_CYCLES sanc;
 
 #define NUM_SAN_CYCLE_BUFS_PER_SECTOR	2
 #define NUM_SAN_CYCLE_BUFS_SECTORS		2	//we need at least two sectors so that if one is in the middle of an update when the power goes down another is still in tact
 
-unsigned int chassisSanCycleIdx = 0;
+unsigned int sanCycleFlashIdx = 0;
 
 
 /*
@@ -274,15 +276,17 @@ unsigned int chassisSanCycleIdx = 0;
 
 typedef struct {
 	
-	unsigned int	totalSanitationMinutes	: 23;
-	unsigned int	csum					: 9;
+	unsigned int	mins	: 23;
+	unsigned int	csum	: 9;
 	
 }CHASSIS_SANITATION_MINUTES;
+
+CHASSIS_SANITATION_MINUTES sanm;
 
 #define NUM_SAN_MIN_BUFS_PER_SECTOR		29
 #define NUM_SAN_MIN_BUFS_SECTORS		2	//we need at least two sectors so that if one is in the middle of an update when the power goes down another is still in tact
 
-unsigned int chassisSanMinIdx = 0;
+unsigned int sanMinFlashIdx = 0;
 
 
 /*
@@ -309,16 +313,16 @@ typedef struct {
 
 typedef struct  
 {
-	USAGE_SERIAL_ID_AND_HOURS	uhrs[(NUM_LED_BOARD_SIDES * NUM_SETS_LED_BOARD_SIDES)];
+	USAGE_SERIAL_ID_AND_HOURS	u[(NUM_LED_BOARD_SIDES * NUM_SETS_LED_BOARD_SIDES)];
 	unsigned char				csum;
 }USAGE_SERIAL_ID_AND_HOURS_SET;
 
-USAGE_SERIAL_ID_AND_HOURS_SET uHrsSet;
+USAGE_SERIAL_ID_AND_HOURS_SET ush;
 
 #define NUM_USAGE_HOURS_SECTORS_PER_BUF		6
 #define NUM_USAGE_HOURS_BUFS_SECTORS		12
 
-unsigned int usageHrIdx = 0;
+unsigned int ushFlashIdx = 0;
 
 
 
@@ -331,24 +335,19 @@ unsigned int usageHrIdx = 0;
  */
 
 
-typedef struct {
-
-	unsigned char minutes	:6;	
-	unsigned char csum		:2;
-	
-} USAGE_MINS;
-
 typedef struct  
 {
-	USAGE_MINS uMins[(NUM_LED_BOARD_SIDES * NUM_SETS_LED_BOARD_SIDES)];
+	unsigned char	mins[(NUM_LED_BOARD_SIDES * NUM_SETS_LED_BOARD_SIDES)];
+	unsigned char	csum;
+
 } USAGE_MINS_SET;
 
-USAGE_MINS_SET uMinsSet;
+USAGE_MINS_SET um;
 
 #define NUM_USAGE_MINS_BUFS_PER_SECTOR		1
 #define NUM_USAGE_HOURS_BUFS_SECTORS		116
 
-unsigned int usageMinIdx = 0;
+unsigned int umFlashIdx = 0;
 
 
 
