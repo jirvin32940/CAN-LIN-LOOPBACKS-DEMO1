@@ -320,7 +320,7 @@ SECTIONS
     *(.flash_nvram2)
   } >FLASH AT>FLASH :FLASH_NVRAM2
 
-  .flash_nvram3   ORIGIN(FLASH) + LENGTH(FLASH) - (__flash0_nvram_size__ + __flash1_nvram_size + __flash2_nvram_size__ + __flash3_nvram_size__) (NOLOAD):  /* 24may15: usage minutes */
+  .flash_nvram3   ORIGIN(FLASH) + LENGTH(FLASH) - (__flash0_nvram_size__ + __flash1_nvram_size__ + __flash2_nvram_size__ + __flash3_nvram_size__) (NOLOAD):  /* 24may15: usage minutes */
   {
     *(.flash_nvram3)
   } >FLASH AT>FLASH :FLASH_NVRAM3
