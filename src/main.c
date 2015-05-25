@@ -267,7 +267,8 @@ USAGE_SHADOW usageShdw[2];
 typedef struct {
 	
 	unsigned int	cycles	: 19;
-	unsigned int	csum	: 5;
+	unsigned int	csum	: 8;
+	unsigned int			: 15; //compiler forces this to 4 bytes anyway
 	
 }CHASSIS_SANITATION_CYCLES;
 
@@ -1537,7 +1538,7 @@ enum {SUCCESS, ERROR};
 unsigned char test_flash(unsigned char sel)
 {
 	volatile void* memPtr;
-	unsigned char pattern[4] = {0xFF, 0x00, 0xAA, 0x55}, ubyte;
+	unsigned char pattern[4] = {0x00, 0xAA, 0x55, 0xFF}, ubyte; //NOTE that 0xFF has to be the last pattern so that the flash is essentially erased going into the rest of the operation
 	unsigned char *ubPtr;
 	unsigned long memSize;
 	
@@ -1575,7 +1576,7 @@ unsigned char test_flash(unsigned char sel)
 unsigned char test_flash(unsigned char sel)
 {
 	volatile void* memPtr;
-	unsigned char pattern[4] = {0xFF, 0x00, 0xAA, 0x55}, ubyte;
+	unsigned char pattern[4] = {0x00, 0xAA, 0x55, 0xFF}, ubyte; //NOTE test 0xFF pattern last to essentially erase the flash
 	unsigned char *ubPtr;
 	unsigned long memSize;
 	
@@ -1634,7 +1635,7 @@ unsigned char calc_region_checksum(unsigned char sel)
 			csum = ((sanm.mins ^ 0xFF) & 0xFF);
 			break;
 		case 1: //san cycles
-			csum = ((sanc.cycles ^ 0xFF) & 0x1F);
+			csum = ((sanc.cycles ^ 0xFF) & 0xFF);
 			break;
 		case 2: //usage hours
 			csum = 0;
@@ -1677,7 +1678,7 @@ unsigned char eval_region(unsigned char sel)
 	unsigned char					csum;
 	long							flashOffset;
 	long							tmpFlashOffset;
-	unsigned char					retVal = ERROR;
+	unsigned char					retVal = 0; //NOT GOOD
 	
 
 	unsigned long tmpHours, uHours, tmpMinutes, uMinutes;
@@ -1706,7 +1707,7 @@ unsigned char eval_region(unsigned char sel)
 				
 				if (csum == sanm.csum) //checksum is good
 				{
-					retVal = SUCCESS; //we have at least one good copy
+					retVal = 1; //we have at least one good copy
 					
 					if (sanm.mins > tmpSanm.mins)
 					{
@@ -1715,6 +1716,12 @@ unsigned char eval_region(unsigned char sel)
 					}
 				}
 			}
+			
+			if (retVal == 1)
+			{
+				memcpy(&sanm, &tmpSanm, sizeof(sanm));
+			}
+			
 			break;
 		case 1: //san cycles
 
@@ -1731,14 +1738,14 @@ unsigned char eval_region(unsigned char sel)
 					flashOffset = (128 + ((i - NUM_SAN_CYCLE_BUFS_PER_SECTOR) * sizeof(sanc)));
 				}
 				
-				tmpFlashOffset = flashOffset + (unsigned long) sanitationCyclesFlash+flashOffset;
+				tmpFlashOffset = flashOffset + (unsigned long) sanitationCyclesFlash;
 				memcpy(&sanc, (const void*) tmpFlashOffset, sizeof(sanc));
 				
 				csum = calc_region_checksum(1);
 				
 				if (csum == sanc.csum) //checksum is good
 				{
-					retVal = SUCCESS; //we have at least one good copy
+					retVal = 1; //we have at least one good copy
 					
 					if (sanc.cycles > tmpSanc.cycles)
 					{
@@ -1746,6 +1753,10 @@ unsigned char eval_region(unsigned char sel)
 						sanCycleFlashIdx = i; //this is the new best copy
 					}
 				}
+			}
+			if (retVal == 1)
+			{
+				memcpy(&sanc, &tmpSanc, sizeof(sanc));
 			}
 			break;
 		case 2: //usage hours
@@ -1764,7 +1775,7 @@ unsigned char eval_region(unsigned char sel)
 				
 				if (csum == ush.csum) //checksum is good
 				{
-					retVal = SUCCESS; //we have at least one good copy
+					retVal = 1; //we have at least one good copy
 					
 					tmpHours = 0;
 					uHours = 0;
@@ -1789,6 +1800,11 @@ unsigned char eval_region(unsigned char sel)
 					}
 				}
 			}
+			if (retVal == 1)
+			{
+				memcpy(&ush, &tmpUsh, sizeof(ush));
+			}
+
 			break;
 		case 3: //usage minutes
 
@@ -1796,7 +1812,7 @@ unsigned char eval_region(unsigned char sel)
 			
 			for (unsigned int i=0; i<(NUM_USAGE_MINS_BUFS_PER_SECTOR * NUM_USAGE_MINS_BUFS_SECTORS); i++)
 			{
-				flashOffset = (i * NUM_USAGE_HOURS_SECTORS_PER_BUF * 128);
+				flashOffset = (i * NUM_USAGE_MINS_BUFS_PER_SECTOR * 128);
 				
 				tmpFlashOffset = flashOffset + (unsigned long) usageMinutesFlash;
 				
@@ -1806,7 +1822,7 @@ unsigned char eval_region(unsigned char sel)
 				
 				if (csum == um.csum) //checksum is good
 				{
-					retVal = SUCCESS; //we have at least one good copy
+					retVal = 1; //we have at least one good copy
 					
 					tmpMinutes = 0;
 					uMinutes = 0;
@@ -1824,6 +1840,10 @@ unsigned char eval_region(unsigned char sel)
 						umFlashIdx = i; //this is the new best copy
 					}
 				}
+			}
+			if (retVal == 1)
+			{
+				memcpy(&um, &tmpUm, sizeof(um));
 			}
 			break;
 	}
@@ -2289,9 +2309,11 @@ void increment_ledBoard_usage_min(void)
 void inc_sanMins(void);
 void inc_sanMins(void)
 {
+	sanm.mins++;
+	sanMinFlashIdx++;
 	sanm.csum = calc_region_checksum(0);
 	write_region_to_flash(0, 0xFF, sanm.csum);
-	if (++sanMinFlashIdx > (NUM_SAN_MIN_BUFS_PER_SECTOR * NUM_SAN_MIN_BUFS_SECTORS))
+	if (sanMinFlashIdx > (NUM_SAN_MIN_BUFS_PER_SECTOR * NUM_SAN_MIN_BUFS_SECTORS))
 	{
 		sanMinFlashIdx = 0;
 	}
@@ -2300,9 +2322,11 @@ void inc_sanMins(void)
 void inc_sanCycles(void);
 void inc_sanCycles(void)
 {
+	sanc.cycles++;
+	sanCycleFlashIdx++;
 	sanc.csum = calc_region_checksum(1);
 	write_region_to_flash(1, 0xFF, sanc.csum);
-	if (++sanCycleFlashIdx > (NUM_SAN_CYCLE_BUFS_PER_SECTOR * NUM_SAN_CYCLE_BUFS_SECTORS))
+	if (sanCycleFlashIdx > (NUM_SAN_CYCLE_BUFS_PER_SECTOR * NUM_SAN_CYCLE_BUFS_SECTORS))
 	{
 		sanCycleFlashIdx = 0;
 	}
@@ -2344,8 +2368,9 @@ void increment_ledBoard_usage_min(void)
 				}
 
 				um.mins[idx] = um.mins[idx] + 1;
-				if (((um.mins[idx]) %60) == 0)
+				if (um.mins[idx] > 59)
 				{
+					um.mins[idx] = 0;
 					hourRollover++; //count number of board sides that had hours rollover this pass for the current hourPingPong selection
 					ush.u[idx].hours = ush.u[idx].hours + 1;
 						
@@ -2358,19 +2383,20 @@ void increment_ledBoard_usage_min(void)
 		} //if (shelf[i].active)
 	} //for (i=0; i<NUM_SHELVES; i++)
 	
-
+	umFlashIdx++;
 	um.csum = calc_region_checksum(3);
 	write_region_to_flash(3, 0xFF, um.csum);
-	if (++umFlashIdx > NUM_USAGE_MINS_BUFS_SECTORS)
+	if (umFlashIdx > NUM_USAGE_MINS_BUFS_SECTORS)
 	{
 		umFlashIdx = 0;
 	}
 
 	if (hourRollover)
 	{
+		ushFlashIdx++;
 		ush.csum = calc_region_checksum(2);
 		write_region_to_flash(2, 0xFF, ush.csum);
-		if (++ushFlashIdx > (NUM_USAGE_HOURS_BUFS_SECTORS/NUM_USAGE_HOURS_SECTORS_PER_BUF))
+		if (ushFlashIdx > (NUM_USAGE_HOURS_BUFS_SECTORS/NUM_USAGE_HOURS_SECTORS_PER_BUF))
 		{
 			ushFlashIdx = 0;
 		}
@@ -2744,9 +2770,9 @@ void show_chassis_status_info(void)
 	
 	print_ecdbg("\r\n***INSTALLED LED BOARDS***\r\n\r\n");
 	
-	print_ecdbg(" LED | LED BOARD  |   UPPER SIDE     |   LOWER SIDE    \r\n");
-	print_ecdbg("SLOT |    ID      | HRS:MIN    DTE   | HRS:MIN    DTE   \r\n");
-	print_ecdbg("--------------------------------------------------------\r\n");
+	print_ecdbg(" LED | LED BOARD    |   UPPER SIDE     |   LOWER SIDE    \r\n");
+	print_ecdbg("SLOT |    ID        | HRS:MIN    DTE   | HRS:MIN    DTE   \r\n");
+	print_ecdbg("----------------------------------------------------------\r\n");
 	
 	for (int i=0; i<NUM_LED_BOARDS; i++)
 	{
@@ -2796,7 +2822,7 @@ void show_chassis_status_info(void)
 			} 
 			
 			
-			sprintf(pStr, "%2d     %X%X%X%X%X%X  %04d:%02d     %02d     %04d:%02d     %02d\r\n", 
+			sprintf(pStr, "%2d     %02X%02X%02X%02X%02X%02X  %04d:%02d     %02d     %04d:%02d     %02d\r\n", 
 				i, 
 				ledBrd[i].id[0], ledBrd[i].id[1], ledBrd[i].id[2], ledBrd[i].id[3], ledBrd[i].id[4], ledBrd[i].id[5],
 				uHrs, uMins,
@@ -3008,14 +3034,14 @@ void show_chassis_all_LED_boards(void)
 #ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 		if (usageShdw[0].u[i].slotFilled)
 		{
-			sprintf(str, "%2d) %X%X%X%X%X%X ", i,
+			sprintf(str, "%2d) %02X%02X%02X%02X%02X%02X ", i,
 				usageShdw[0].u[i].id[0],usageShdw[0].u[i].id[1],usageShdw[0].u[i].id[2],usageShdw[0].u[i].id[3],usageShdw[0].u[i].id[4],usageShdw[0].u[i].id[5]);
 			
 			if (usageShdw[0].u[i].top_botn)
 #else
 		if (ush.u[i].slotFilled)
 		{
-			sprintf(str, "%2d) %X%X%X%X%X%X ", i,
+			sprintf(str, "%2d) %02X%02X%02X%02X%02X%02X ", i,
 			ush.u[i].id[0],ush.u[i].id[1],ush.u[i].id[2],ush.u[i].id[3],ush.u[i].id[4],ush.u[i].id[5]);
 			
 			if (ush.u[i].top_botn)
@@ -3077,7 +3103,7 @@ int main(void)
 
 	// Print Startup Message
 	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
-	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.005\r\n");
+	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.015\r\n");
 
 	display_text(IDX_READY);
 	
