@@ -76,6 +76,7 @@
 #include "flashc.h"				//2may15
 #include "string.h"
 #include "stdio.h"
+#include "ctype.h"
 #include "sysclk.h"
 #include <pll.h>
 
@@ -2860,7 +2861,7 @@ void show_chassis_status_info(void)
 	print_ecdbg_num(sanMinutesMin);
 	print_ecdbg("\r\n");
 	
-	print_ecdbg("TOTAL SANITIZE HOURS: ");
+	print_ecdbg("TOTAL SANITIZE TIME: ");
 #ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED	
 	if ((usageShdw[0].totalSanitationMinutes%60) > 30)
 	{
@@ -2873,15 +2874,20 @@ void show_chassis_status_info(void)
 	print_ecdbg(" TOTAL SANITIZE CYCLES: ");
 	print_ecdbg_num(usageShdw[0].totalSanitationCycles);
 #else
-	if ((sanm.mins%60) > 30)
+	if ((sanm.mins/60) < 10)
 	{
-		print_ecdbg_num((sanm.mins/60)+1);
+		print_ecdbg("0"); //print leading 0 if we need it
 	}
-	else
+	print_ecdbg_num((sanm.mins/60));
+	print_ecdbg(":");
+
+	if ((sanm.mins%60) < 10)
 	{
-		print_ecdbg_num(sanm.mins/60);
+		print_ecdbg("0"); //print leading 0 if we need it
 	}
-	print_ecdbg(" TOTAL SANITIZE CYCLES: ");
+	print_ecdbg_num((sanm.mins%60));
+
+	print_ecdbg("  TOTAL SANITIZE CYCLES: ");
 	print_ecdbg_num(sanc.cycles);
 
 #endif //SERIAL_ID_AND_ALL_USAGE_COMBINED	
@@ -3069,6 +3075,142 @@ void show_chassis_all_LED_boards(void)
 
 }
 
+void show_help_and_prompt(void);
+void show_help_and_prompt(void)
+{
+	print_ecdbg("Type 'H' for help.\r\n\r\n");
+}
+
+char cmd[20];
+unsigned char cmdIdx = 0;
+unsigned char initialDTE = 20;
+
+void service_ecdbg_input(void);
+void service_ecdbg_input(void)
+{
+	int rx_char;
+	unsigned int tmpNewDte;
+	unsigned char tryToChangeDte = 0;
+
+	if (usart_read_char(ECDBG_USART, &rx_char) != USART_SUCCESS)
+	{
+		return;
+	}
+
+	if (rx_char == USART_FAILURE)
+	{
+//26may15 why are we getting this? ignore for now		usart_write_line(ECDBG_USART, "UART error\r\n");
+		return;
+	}
+	if (rx_char == '\x03')
+	{
+		return;
+	}
+	
+	if ((rx_char < 0x0a) || (rx_char > 0x7a))
+	{
+		return; //completely out of range, ignore
+	}
+	
+	
+	if ((rx_char == 0x0d) ||							//carriage return
+		(rx_char == 0x0a) ||							//line feed
+		(rx_char == 0x20) ||							//space
+		((rx_char >= 0x30) && (rx_char <= 0x39)) ||		//decimal number
+		((rx_char >= 0x41) && (rx_char <= 0x5a)) ||		//upper case alpha
+		((rx_char >= 0x61) && (rx_char <= 0x7a)))		//lower case alpha
+	{
+		if (rx_char == 0x50)
+		{
+			return; //TODO: this is kludgey...whenever we print to the debug port we rx a 'P' (0x50), just ignore them for now.
+		}
+	}
+	else
+	{
+		return;
+	}
+
+
+	cmd[cmdIdx++] = rx_char;
+	
+	usart_putchar(ECDBG_USART, rx_char);
+	if (rx_char == '\r')
+	{ 
+		if (cmdIdx == 2)
+		{
+			switch(cmd[0])
+			{
+				case 'H':
+				case 'h':
+					print_ecdbg("\r\n**-----------------**\r\n");
+					print_ecdbg("  Electroclave HELP\r\n");
+					print_ecdbg("    H        - This help menu\r\n");
+					print_ecdbg("    D        - Show current DTE setting\r\n");
+					print_ecdbg("    D  xx    - Change initial DTE to xx minutes where 2 >= xx >= 59.\r\n");
+					print_ecdbg("    S        - System status\r\n");
+					print_ecdbg(">");
+					break;
+				case 'D':
+				case 'd':
+					print_ecdbg("Initial DTE set to: ");
+					print_ecdbg_num(initialDTE);
+					print_ecdbg(" minutes.\r\n>");
+					break;
+				case 'S':
+				case 's':
+					show_chassis_status_info();
+					show_chassis_sysErr();
+					show_chassis_all_LED_boards();
+					show_help_and_prompt();
+					break;
+			}
+		}
+		else if (cmd[1] == ' ')
+		{
+			if ((cmd[0] == 'D') || (cmd[0] == 'd'))
+			{
+				if (cmdIdx == 4)
+				{
+					if (isdigit(cmd[2]))
+					{
+						tmpNewDte = cmd[2] - 0x30;
+						tryToChangeDte = 1;
+					}					
+				}
+				else if (cmdIdx == 5)
+				{
+					if (isdigit(cmd[2]) && (isdigit(cmd[3])))
+					{
+						tmpNewDte = (cmd[2]-0x30) * 10;
+						tmpNewDte += (cmd[3] - 0x30);
+						tryToChangeDte = 1;
+					}
+				}
+				if (tryToChangeDte)
+				{
+					if ((tmpNewDte < 60) && (tmpNewDte > 1))
+					{
+						print_ecdbg("Initial DTE now set to: ");
+						print_ecdbg_num(tmpNewDte);
+						print_ecdbg("\r\n>");
+						
+						initialDTE = tmpNewDte;
+					}
+					else
+					{
+						print_ecdbg("Error. Initial DTE not modified. \r\n");
+						print_ecdbg("Must be a value between 2 and 59.\r\n>");
+					}
+				}
+			}
+		}
+		
+		// Add a LF and consider this as the end of the line.
+		print_ecdbg("\r\n>");
+		cmdIdx = 0;
+		return;
+	}
+}
 
 
 
@@ -3103,7 +3245,7 @@ int main(void)
 
 	// Print Startup Message
 	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
-	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.015\r\n");
+	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.029\r\n");
 
 	display_text(IDX_READY);
 	
@@ -3132,6 +3274,7 @@ int main(void)
 	show_chassis_status_info();
 	show_chassis_sysErr();
 	show_chassis_all_LED_boards();
+	show_help_and_prompt();
 	
 	gpio_set_pin_low(ECLAVE_LED_OEn); //...and we are live!
 	gpio_set_pin_low(ECLAVE_PSUPPLY_ONn); //turn the leds on first and then the power supply
@@ -3142,7 +3285,6 @@ int main(void)
 	// Main loop
 	while (true) 
 	{
-
 		switch(electroclaveState)
 		{
 			case STATE_EC_IDLE:
@@ -3377,6 +3519,9 @@ int main(void)
 			cpu_set_timeout((EC_ONE_SECOND/2), &debugTimer);
 			gpio_toggle_pin(ECLAVE_DEBUG_LED);
 		}
+		
+		service_ecdbg_input();
+
 	} //while(true)
 	
 } //main
