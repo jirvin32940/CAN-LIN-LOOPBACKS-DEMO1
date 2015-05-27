@@ -93,10 +93,10 @@ SECTIONS
 
   /* Use a default flash NVRAM size if flash NVRAM size was not defined. */
   __flash_nvram_size__ = DEFINED(__flash_nvram_size__) ? __flash_nvram_size__ : 2K; /* 2may15 */
-  __flash0_nvram_size__ = DEFINED(__flash0_nvram_size__) ? __flash0_nvram_size__ : 256;			/* sanitation minutes	24may15 */
-  __flash1_nvram_size__ = DEFINED(__flash1_nvram_size__) ? __flash1_nvram_size__ : 256;			/* sanitation cycles	24may15 */
-  __flash2_nvram_size__ = DEFINED(__flash2_nvram_size__) ? __flash2_nvram_size__ : (12*128);	/* usage hours			24may15 */
-  __flash3_nvram_size__ = DEFINED(__flash3_nvram_size__) ? __flash3_nvram_size__ : (116*128);	/* usage minutes		24may15 */
+  __flash0_nvram_size__ = DEFINED(__flash0_nvram_size__) ? __flash0_nvram_size__ : (12*128);	/* serial ID + flags	26may15 */
+  __flash1_nvram_size__ = DEFINED(__flash1_nvram_size__) ? __flash1_nvram_size__ : (6*128);		/* sanitation cycles	26may15 */
+  __flash2_nvram_size__ = DEFINED(__flash2_nvram_size__) ? __flash2_nvram_size__ : (4*128);		/* usage hours			26may15 */
+  __flash3_nvram_size__ = DEFINED(__flash3_nvram_size__) ? __flash3_nvram_size__ : (116*128);	/* usage minutes		26may15 */
 
 
   /* Read-only sections, merged into text segment: */

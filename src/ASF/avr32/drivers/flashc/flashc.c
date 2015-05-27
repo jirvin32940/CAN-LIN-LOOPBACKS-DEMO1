@@ -901,7 +901,7 @@ volatile void *flashc_memcpy(volatile void *dst, const void *src, size_t nbytes,
 
 	b_user_page = (volatile uint8_t *)dst >= AVR32_FLASHC_USER_PAGE;
 
-	flash_add = (uint8_t*)((uint32_t)dest_add - ((uint32_t)dest_add % AVR32_FLASHC_PAGE_SIZE));
+	flash_add = (uint8_t*)((uint32_t)dest_add - ((uint32_t)dest_add % AVR32_FLASHC_USER_PAGE));
 
 	while (nbytes) {
 		// Clear the page buffer in order to prepare data for a flash page write.
