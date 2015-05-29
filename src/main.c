@@ -251,7 +251,8 @@ USAGE_SHADOW usageShdw[2];
  *												to be updated once per minute, and since there is no guarantee that the minutes will roll over to
  *												hours at the same time for each of the 96 entries, we need to create lots of buffers for this struct
  *												to make sure we don't exceed the flash max erase cycles of 100,000.
- *
+ * -(4)Configuration							User discretion. 2 copies at 100,000 erase cycles should be *more* than enough. Who is going to change 
+ *												 initialDTE more than 200,000 times during the lifetime of the chassis? <famous last words.>
  */
 
 
@@ -326,7 +327,7 @@ unsigned int sanCycleFlashIdx = 0;
 
 typedef struct  
 {
-	unsigned int	hrs[(NUM_LED_BOARD_SIDES * NUM_SETS_LED_BOARD_SIDES)];
+	unsigned short	hrs[(NUM_LED_BOARD_SIDES * NUM_SETS_LED_BOARD_SIDES)];
 	unsigned char	csum;
 
 }USAGE_HOURS_SET;
@@ -366,6 +367,27 @@ USAGE_MINS_SET m;
 unsigned int mFlashIdx = 0;
 
 
+
+/*
+ * REGION 4 - CONFIGURATION
+ *
+ * Currently just initialDTE. Plenty of room for expansion.
+ */
+
+
+typedef struct  
+{
+	unsigned char	initialDTE;
+	unsigned char	csum;
+
+} CONFIGURATION;
+
+CONFIGURATION c;
+
+#define NUM_CONFIG_BUFS_PER_SECTOR		1
+#define NUM_CONFIG_BUFS_SECTORS			2
+
+unsigned int configFlashIdx = 0;
 
 
 #endif //old or new SERIAL_ID_AND_USAGE scheme
@@ -663,7 +685,7 @@ unsigned char check_led_brd_side_lifetime(unsigned char sideIdx)
  */
 	intensity = ((0.00002 * hours * hours) - (0.0699 * hours) + 92.879);
 		
-	ledBrdSide[sideIdx].sanitizeMinutes = (20 * 100)/intensity; //Shortest sanitize time is 20 minutes. Sanitize time increases as LED intensity drops with usage. Sanitize time is around 49 minutes when usage is at 2000 hours.
+	ledBrdSide[sideIdx].sanitizeMinutes = (c.initialDTE * 100)/intensity; //Shortest sanitize time is 20 minutes. Sanitize time increases as LED intensity drops with usage. Sanitize time is around 49 minutes when usage is at 2000 hours.
 	
 	if (hours < 1999)
 	{
@@ -1294,6 +1316,15 @@ static unsigned char usageMinutesFlash[NUM_USAGE_MINS_BUFS_SECTORS * 128]
 #endif
 ;
 
+#if defined (__GNUC__)
+__attribute__((__section__(".flash_nvram4")))
+#endif
+static unsigned char configFlash[NUM_CONFIG_BUFS_SECTORS * 128]
+#if defined (__ICCAVR32__)
+@ "FLASH_NVRAM4"
+#endif
+;
+
 
 
 #endif //SERIAL_ID_AND_ALL_USAGE_COMBINED
@@ -1577,7 +1608,7 @@ unsigned char test_flash(unsigned char sel)
 	switch(sel)
 	{
 		case 0:
-			memPtr = &sfFlash;
+			memPtr = &serialIdAndFlagsFlash;
 			memSize = NUM_SERIAL_ID_BUFS_SECTORS * 128;
 			break;
 		case 1:
@@ -1664,6 +1695,11 @@ unsigned char calc_region_checksum(unsigned char sel)
 			csum += m.sanMins;
 			csum = ((csum ^ 0xFF) & 0xFF);
 			break;
+		case 4: //configuration
+			csum = 0;
+			csum += c.initialDTE;
+			csum = ((csum ^ 0xFF) & 0xFF);
+			break;
 	}
 	
 	return csum;	
@@ -1672,10 +1708,11 @@ unsigned char calc_region_checksum(unsigned char sel)
 unsigned char eval_region(unsigned char sel);
 unsigned char eval_region(unsigned char sel)
 {
-	SERIAL_ID_AND_FLAGS				tmpSf;
+	SERIAL_ID_AND_FLAGS				tmpSf[(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES)];
 	CHASSIS_SANITATION_CYCLES		tmpSanc;
 	USAGE_HOURS_SET					tmpH;
 	USAGE_MINS_SET					tmpM;
+	CONFIGURATION					tmpC;
 	
 	unsigned char					csum;
 	long							flashOffset;
@@ -1685,12 +1722,16 @@ unsigned char eval_region(unsigned char sel)
 
 	unsigned long tmpHours, uHours, tmpMinutes, uMinutes, tmpSlotsFilled, uSlotsFilled;
 	
+	print_ecdbg("eval_region() ");
+	
 	switch (sel)
 	{
 		case 0: //serial ID and flags
 			
+			print_ecdbg("region 0 - serial ID and flags\r\n");
+			
 			memset(&tmpSf, 0x00, sizeof(sf));
-		
+			
 			for (unsigned int i=0; i<(NUM_SERIAL_ID_BUFS_SECTORS / NUM_SERIAL_ID_SECTORS_PER_BUF); i++)
 			{
 				flashOffset =  (i* 128 * NUM_SERIAL_ID_SECTORS_PER_BUF);
@@ -1701,22 +1742,29 @@ unsigned char eval_region(unsigned char sel)
 
 				if (csum == sf[0].csum) //checksum is good
 				{
+					print_ecdbg("good csum\r\n");
+					
 					retVal = 1; //we have at least one good copy
-					
-					tmpSlotsFilled = 0; 
+
+					tmpSlotsFilled = 0;
 					uSlotsFilled = 0;
-					
+				
 					for (int j=0; j<(NUM_SETS_LED_BOARD_SIDES * NUM_LED_BOARD_SIDES); j++)
 					{
-						tmpSlotsFilled += tmpSf.slotFilled;
-						uSlotsFilled += sf.slotFilled;
+						tmpSlotsFilled += tmpSf[j].slotFilled;
+						uSlotsFilled += sf[j].slotFilled;
 					}
-					
+				
 					if (uSlotsFilled > tmpSlotsFilled)
 					{
 						memcpy(&tmpSf, &sf, sizeof(sf));
-						sfFlashIdx = i; //this is the new best copy	
+						sfFlashIdx = i; //this is the new best copy
+						
+						print_ecdbg("sfFlashIdx ");
+						print_ecdbg_num(sfFlashIdx);
+						print_ecdbg("\r\n");
 					}
+
 				}
 			}
 			
@@ -1729,6 +1777,8 @@ unsigned char eval_region(unsigned char sel)
 		case 1: //san cycles
 			memset(&tmpSanc, 0x00, sizeof(sanc));
 
+			print_ecdbg("region 1 - sanitation cycles\r\n");
+
 			for (unsigned int i=0; i<(NUM_SAN_CYCLE_BUFS_PER_SECTOR * NUM_SAN_CYCLE_BUFS_SECTORS); i++)
 			{
 				flashOffset = (i * 128 * NUM_SAN_CYCLE_BUFS_PER_SECTOR);
@@ -1740,12 +1790,18 @@ unsigned char eval_region(unsigned char sel)
 				
 				if (csum == sanc.csum) //checksum is good
 				{
+					print_ecdbg("good csum\r\n");
+
 					retVal = 1; //we have at least one good copy
 					
 					if (sanc.cycles > tmpSanc.cycles)
 					{
 						memcpy(&tmpSanc, &sanc, sizeof(sanc));
 						sanCycleFlashIdx = i; //this is the new best copy
+
+						print_ecdbg("sanCycleFlashIdx ");
+						print_ecdbg_num(sanCycleFlashIdx);
+						print_ecdbg("\r\n");
 					}
 				}
 			}
@@ -1756,7 +1812,9 @@ unsigned char eval_region(unsigned char sel)
 			break;
 			
 		case 2: //usage hours
-			memset(&tmpUsh, 0x00, sizeof(ush));
+			memset(&tmpH, 0x00, sizeof(h));
+
+			print_ecdbg("region 2 - usage hours\r\n");
 
 			for (unsigned int i=0; i<(NUM_USAGE_HOURS_BUFS_SECTORS / NUM_USAGE_HOURS_SECTORS_PER_BUF); i++)
 			{
@@ -1770,6 +1828,8 @@ unsigned char eval_region(unsigned char sel)
 				
 				if (csum == h.csum) //checksum is good
 				{
+					print_ecdbg("good csum\r\n");
+
 					retVal = 1; //we have at least one good copy
 					
 					tmpHours = 0;
@@ -1785,6 +1845,11 @@ unsigned char eval_region(unsigned char sel)
 					{
 						memcpy(&tmpH, &h, sizeof(h));
 						hFlashIdx = i; //this is the new best copy
+						
+						print_ecdbg("hFlashIdx ");
+						print_ecdbg_num(hFlashIdx);
+						print_ecdbg("\r\n");
+
 					}
 				}
 			}
@@ -1796,6 +1861,8 @@ unsigned char eval_region(unsigned char sel)
 
 		case 3: //usage minutes
 			memset(&tmpM, 0x00, sizeof(m));
+			
+			print_ecdbg("region 3 - usage minutes\r\n");
 			
 			for (unsigned int i=0; i<(NUM_USAGE_MINS_BUFS_PER_SECTOR * NUM_USAGE_MINS_BUFS_SECTORS); i++)
 			{
@@ -1809,6 +1876,8 @@ unsigned char eval_region(unsigned char sel)
 				
 				if (csum == m.csum) //checksum is good
 				{
+					print_ecdbg("good csum\r\n");
+
 					retVal = 1; //we have at least one good copy
 					
 					tmpMinutes = 0;
@@ -1825,6 +1894,10 @@ unsigned char eval_region(unsigned char sel)
 					{
 						memcpy(&tmpM, &m, sizeof(m));
 						mFlashIdx = i; //this is the new best copy
+
+						print_ecdbg("mFlashIdx ");
+						print_ecdbg_num(mFlashIdx);
+						print_ecdbg("\r\n");
 					}
 				}
 			}
@@ -1833,6 +1906,40 @@ unsigned char eval_region(unsigned char sel)
 				memcpy(&m, &tmpM, sizeof(m));
 			}
 			break;
+		case 4: //configuration
+			memset(&tmpC, 0x00, sizeof(c));
+
+			print_ecdbg("region 4 - configuration\r\n");
+
+			for (unsigned int i=0; i<(NUM_CONFIG_BUFS_PER_SECTOR * NUM_CONFIG_BUFS_SECTORS); i++)
+			{
+				flashOffset = (i * 128 * NUM_CONFIG_BUFS_PER_SECTOR);
+			
+				tmpFlashOffset = flashOffset + (unsigned long) configFlash;
+				memcpy(&c, (const void*) tmpFlashOffset, sizeof(c));
+			
+				csum = calc_region_checksum(4);
+			
+				if (csum == c.csum) //checksum is good
+				{
+					print_ecdbg("good csum\r\n");
+
+					retVal = 1; //we have at least one good copy
+				
+					memcpy(&tmpC, &c, sizeof(c));
+					configFlashIdx = i; //no good eval criteria for initialDTE: user could increase or decrease it. Therefore, always store 2 copies so both copies will be the same.
+
+					print_ecdbg("configFlashIdx ");
+					print_ecdbg_num(configFlashIdx);
+					print_ecdbg("\r\n");
+				}
+			}
+			if (retVal == 1)
+			{
+				memcpy(&c, &tmpC, sizeof(c));
+			}
+			break;
+		
 	}
 	
 	return retVal;
@@ -1842,7 +1949,6 @@ unsigned char write_region_to_flash(unsigned char sel, unsigned char idx, unsign
 unsigned char write_region_to_flash(unsigned char sel, unsigned char idx, unsigned char csum)
 {
 	unsigned long tmpFlashOffset, flashOffset;
-	bool eraseFlag;
 	unsigned char tmpIdx;
 	
 	if (idx == 0xFF) //use the default system index
@@ -1860,6 +1966,9 @@ unsigned char write_region_to_flash(unsigned char sel, unsigned char idx, unsign
 				break;
 			case 3: //usage minutes
 				tmpIdx = mFlashIdx;
+				break;
+			case 4: //configuration
+				tmpIdx = configFlashIdx;
 				break;
 		}
 	}
@@ -1902,10 +2011,58 @@ unsigned char write_region_to_flash(unsigned char sel, unsigned char idx, unsign
 			tmpFlashOffset = flashOffset + (unsigned long) usageMinutesFlash;
 			flashc_memcpy((volatile void*)tmpFlashOffset, &m, sizeof(m), true);
 			break;
+
+		case 4: //configuration
+			c.csum = csum;
+			flashOffset = tmpIdx * 128 * NUM_CONFIG_BUFS_PER_SECTOR; //one sector per buf
+			tmpFlashOffset = flashOffset + (unsigned long) configFlash;
+			flashc_memcpy((volatile void*)tmpFlashOffset, &c, sizeof(c), true);
+			break;
 	}
 	
 	return SUCCESS;	
 }
+
+void write_bad_region_to_flash(unsigned char sel, unsigned char idx);
+void write_bad_region_to_flash(unsigned char sel, unsigned char idx)
+{
+	unsigned long tmpFlashOffset, flashOffset;
+	unsigned char tmpIdx;
+
+	USAGE_MINS_SET tmpM;
+	
+	memset(&tmpM, 0x00, sizeof(m)); //just zero it out and don't give it a good checksum
+	
+	if (sel != 3)
+	{
+		return; //we only do this for the minutes region
+	}
+	
+	if (idx == 0xFF) //use the default system index
+	{
+		switch(sel)
+		{
+			case 3: //usage minutes
+				tmpIdx = mFlashIdx;
+				break;
+		}
+	}
+	else //use the specific index passed to this function
+	{
+		tmpIdx = idx;
+	}
+	
+	switch (sel)
+	{
+		case 3: //usage minutes
+			flashOffset = tmpIdx * 128 * NUM_USAGE_MINS_BUFS_PER_SECTOR;
+			tmpFlashOffset = flashOffset + (unsigned long) usageMinutesFlash;
+			flashc_memcpy((volatile void*)tmpFlashOffset, &tmpM, sizeof(m), false); //don't erase, it would just cause the flash to wear out twice as fast
+			break;
+	}
+	
+}
+
 
 void copy_region_to_another_sector(unsigned char sel);
 void copy_region_to_another_sector(unsigned char sel)
@@ -1967,9 +2124,47 @@ void copy_region_to_another_sector(unsigned char sel)
 			csum = calc_region_checksum(3);
 			write_region_to_flash(3, tmpIdx, csum);
 			break;
+
+		case 4: //configuration
+			if (configFlashIdx < ((NUM_CONFIG_BUFS_PER_SECTOR * NUM_CONFIG_BUFS_SECTORS)/2))
+			{
+				tmpIdx = configFlashIdx + ((NUM_CONFIG_BUFS_PER_SECTOR * NUM_CONFIG_BUFS_SECTORS)/2);
+			}
+			else
+			{
+				tmpIdx = configFlashIdx - ((NUM_CONFIG_BUFS_PER_SECTOR * NUM_CONFIG_BUFS_SECTORS)/2);
+			}
+			csum = calc_region_checksum(4);
+			write_region_to_flash(4, tmpIdx, csum);
+			break;
 	}
 	
 }
+
+
+/*
+ * Since minutes just go from 0..59 and then wrap around, we can't use the strategy we use on other structs for
+ * determining the optimum minutes sector (picking the highest value) so we have to do something to disrupt prior
+ * entries which is intentionally write a bad checksum to flash. 
+ */
+void disrupt_prior_m_sector(void);
+void disrupt_prior_m_sector(void)
+{
+	unsigned char tmpIdx;
+
+	if (mFlashIdx > 0)
+	{
+		tmpIdx = mFlashIdx - 1;
+	}
+	else
+	{
+		tmpIdx = NUM_USAGE_MINS_BUFS_SECTORS - 1; //backwards wrap if necessary
+	}
+
+	write_bad_region_to_flash(3, tmpIdx);
+	
+}
+
 
 #endif //SERIAL_ID_AND_ALL_USAGE_COMBINED
 
@@ -2274,14 +2469,26 @@ void inc_sanCycles(void)
 {
 	sanc.cycles++;
 	sanCycleFlashIdx++;
-	sanc.csum = calc_region_checksum(1);
-	write_region_to_flash(1, 0xFF, sanc.csum);
-	if (sanCycleFlashIdx > (NUM_SAN_CYCLE_BUFS_PER_SECTOR * NUM_SAN_CYCLE_BUFS_SECTORS))
+	if (sanCycleFlashIdx >= (NUM_SAN_CYCLE_BUFS_PER_SECTOR * NUM_SAN_CYCLE_BUFS_SECTORS))
 	{
 		sanCycleFlashIdx = 0;
 	}
+	sanc.csum = calc_region_checksum(1);
+	write_region_to_flash(1, 0xFF, sanc.csum);
 }
 
+void store_config(void);
+void store_config(void)
+{
+	/* initialDTE set in the serial user interface */
+	configFlashIdx++;
+	if (configFlashIdx >= (NUM_CONFIG_BUFS_PER_SECTOR * NUM_CONFIG_BUFS_SECTORS))
+	{
+		configFlashIdx = 0;
+	}
+	c.csum = calc_region_checksum(4);
+	write_region_to_flash(4, 0xFF, c.csum);
+}
 
 void increment_ledBoard_usage_min(void)
 {
@@ -2334,22 +2541,24 @@ void increment_ledBoard_usage_min(void)
 	} //for (i=0; i<NUM_SHELVES; i++)
 	
 	mFlashIdx++;
-	m.csum = calc_region_checksum(3);
-	write_region_to_flash(3, 0xFF, m.csum);
-	if (mFlashIdx > NUM_USAGE_MINS_BUFS_SECTORS)
+	if (mFlashIdx >= NUM_USAGE_MINS_BUFS_SECTORS)
 	{
 		mFlashIdx = 0;
 	}
+	m.csum = calc_region_checksum(3);
+	write_region_to_flash(3, 0xFF, m.csum);
+	copy_region_to_another_sector(3);
+	disrupt_prior_m_sector();
 
 	if (hourRollover)
 	{
 		hFlashIdx++;
-		h.csum = calc_region_checksum(2);
-		write_region_to_flash(2, 0xFF, h.csum);
-		if (hFlashIdx > (NUM_USAGE_HOURS_BUFS_SECTORS/NUM_USAGE_HOURS_SECTORS_PER_BUF))
+		if (hFlashIdx >= (NUM_USAGE_HOURS_BUFS_SECTORS/NUM_USAGE_HOURS_SECTORS_PER_BUF))
 		{
 			hFlashIdx = 0;
 		}
+		h.csum = calc_region_checksum(2);
+		write_region_to_flash(2, 0xFF, h.csum);
 
 		hourRollover = 0; //reset for next pass
 	}
@@ -2636,21 +2845,17 @@ void init_led_board_info(void)
 void init_led_board_info(void);
 void init_led_board_info(void)
 {
-	unsigned char regionGood[4];
+	unsigned char regionGood[5];
 	unsigned char csum;
 	
-	init_shelf_n_ledBrd_structs();
-	
-	read_led_board_serial_ids();
-	
-	for (int i=0; i<4; i++)
+	for (int i=0; i<5; i++)
 	{
 		regionGood[i] = eval_region(i);
 	}
 	
-	if (regionGood[0] && regionGood[1] && regionGood[2] && regionGood[3])
+	if (regionGood[0] && regionGood[1] && regionGood[2] && regionGood[3] && regionGood[4])
 	{
-		print_ecdbg("All 4 flash regions have good data sets.\r\n");
+		print_ecdbg("All 5 flash regions have good data sets.\r\n");
 
 		load_usage_indeces();
 		
@@ -2676,6 +2881,12 @@ void init_led_board_info(void)
 		csum = calc_region_checksum(3);
 		write_region_to_flash(3,  0xFF, csum);
 		copy_region_to_another_sector(3);
+
+		//configuration
+		csum = calc_region_checksum(4);
+		write_region_to_flash(4,  0xFF, csum);
+		copy_region_to_another_sector(4);
+
 	}
 	else
 	{
@@ -2683,15 +2894,17 @@ void init_led_board_info(void)
 		memset(&sanc, 0x00, sizeof(sanc));	//total chassis sanitation cycles
 		memset(&h, 0x00, sizeof(h));		//usage hours
 		memset(&m, 0x00, sizeof(m));		//usage minutes
+		memset(&c, 0x00, sizeof(c));		//configuration
+		c.initialDTE = 20; //gotta start somewhere
 
-		for (int i=0; i<4; i++)
+		for (int i=0; i<5; i++)
 		{
 			if (test_flash(i) == ERROR)
 			{
 				print_ecdbg("Flash area ERROR: region ");
 				print_ecdbg_num(i);
 				print_ecdbg("\r\n");
-				sysErr.flashArea |= BIT(0); //SE_FAIL;
+				sysErr.flashArea |= BIT(i); //SE_FAIL;
 				chassis_error();
 			}
 
@@ -2699,7 +2912,7 @@ void init_led_board_info(void)
 		add_new_led_board_sides_to_usage();
 		load_usageIdx_to_ledBrdSide();
 
-		for (int i=0; i<4; i++)
+		for (int i=0; i<5; i++)
 		{
 			unsigned char csum;
 			csum = calc_region_checksum(i);
@@ -2709,6 +2922,15 @@ void init_led_board_info(void)
 	}
 }
 
+
+void show_sw_version(void);
+void show_sw_version(void)
+{
+	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
+	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.038\r\n");
+
+}
+
 void show_chassis_status_info(void);
 void show_chassis_status_info(void)
 {
@@ -2716,7 +2938,6 @@ void show_chassis_status_info(void)
 	unsigned char uSideIdx, lSideIdx, uSideUsageIdx, lSideUsageIdx;
 	unsigned char sanMinutesMax = 0, sanMinutesMin = 0xFF, sanMinutesUpper, sanMinutesLower, uMins, lMins;
 	unsigned int uHrs, lHrs;
-	
 	
 	print_ecdbg("\r\n***INSTALLED LED BOARDS***\r\n\r\n");
 	
@@ -2898,9 +3119,9 @@ void show_chassis_sysErr(void)
  *	Flash
  */
 
-	sprintf(str, "Flash (0..1)                           ");
+	sprintf(str, "Flash (0..4)                           ");
 	
-	for (int i=0; i<2; i++)
+	for (int i=0; i<5; i++)
 	{
 		if ((sysErr.flashArea & BIT(i)) == SE_FAIL)
 		{
@@ -3032,7 +3253,6 @@ void show_help_and_prompt(void)
 
 char cmd[20];
 unsigned char cmdIdx = 0;
-unsigned char initialDTE = 20;
 
 void service_ecdbg_input(void);
 void service_ecdbg_input(void)
@@ -3104,11 +3324,12 @@ void service_ecdbg_input(void)
 				case 'D':
 				case 'd':
 					print_ecdbg("Initial DTE set to: ");
-					print_ecdbg_num(initialDTE);
+					print_ecdbg_num(c.initialDTE);
 					print_ecdbg(" minutes.\r\n>");
 					break;
 				case 'S':
 				case 's':
+					show_sw_version();
 					show_chassis_status_info();
 					show_chassis_sysErr();
 					show_chassis_all_LED_boards();
@@ -3145,7 +3366,11 @@ void service_ecdbg_input(void)
 						print_ecdbg_num(tmpNewDte);
 						print_ecdbg("\r\n>");
 						
-						initialDTE = tmpNewDte;
+						c.initialDTE = tmpNewDte;
+						
+						store_config();
+						store_config(); //do this twice to store it in both buffers to make extra sure we got it
+						
 					}
 					else
 					{
@@ -3178,9 +3403,12 @@ int main(void)
 	init_io();
 	
 	init_sysErr();
-
-	init_led_board_info();
 	
+	init_shelf_n_ledBrd_structs();
+	read_led_board_serial_ids();
+		
+
+
 	//Set clock to 8MHz. We start at 100MHz to get through the DS2411 LED board serial ID detection. But we don't need to run that fast for remaining operations.
 	osc_enable(OSC_ID_RC8M);
 	osc_wait_ready(OSC_ID_RC8M);
@@ -3193,11 +3421,10 @@ int main(void)
 	// Initialize USART again after changing the system clock
 	init_ecdbg_rs232(FPBA_HZ);
 	init_display_rs232(FPBA_HZ);
+	
+	show_sw_version();
 
 	// Print Startup Message
-	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
-	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.030\r\n");
-
 	display_text(IDX_READY);
 	
 	// Initialize ADC for bluesense channels which are used to see if there are any devices (phones, tablets, etc.) on the shelves
@@ -3222,6 +3449,8 @@ int main(void)
 	
 	electroclaveState = STATE_EC_IDLE;
 	
+	init_led_board_info();
+
 	show_chassis_status_info();
 	show_chassis_sysErr();
 	show_chassis_all_LED_boards();
@@ -3411,7 +3640,7 @@ int main(void)
 				display_text(IDX_CLEAN);
 				electroclaveState = STATE_CLEAN;
 #if 0 //DEBUG do this in seconds to debug logic 11may15				
-				cpu_set_timeout((20 * 60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //TODO: this time period will be parameterized from the technician UART interface
+				cpu_set_timeout((20 * 60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer);
 #endif
 				cpu_set_timeout((20 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //DEBUG 11may15 
 

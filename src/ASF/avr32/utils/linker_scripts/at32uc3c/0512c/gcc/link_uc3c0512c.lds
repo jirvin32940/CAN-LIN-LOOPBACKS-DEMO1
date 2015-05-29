@@ -76,6 +76,7 @@ PHDRS
   FLASH_NVRAM1 PT_LOAD;
   FLASH_NVRAM2 PT_LOAD;
   FLASH_NVRAM3 PT_LOAD;
+  FLASH_NVRAM4 PT_LOAD;
   USERPAGE PT_LOAD;
 }
 
@@ -97,7 +98,7 @@ SECTIONS
   __flash1_nvram_size__ = DEFINED(__flash1_nvram_size__) ? __flash1_nvram_size__ : (6*128);		/* sanitation cycles	26may15 */
   __flash2_nvram_size__ = DEFINED(__flash2_nvram_size__) ? __flash2_nvram_size__ : (4*128);		/* usage hours			26may15 */
   __flash3_nvram_size__ = DEFINED(__flash3_nvram_size__) ? __flash3_nvram_size__ : (116*128);	/* usage minutes		26may15 */
-
+  __flash4_nvram_size__ = DEFINED(__flash4_nvram_size__) ? __flash4_nvram_size__ : (2*128);		/* configuration        28may15 */
 
   /* Read-only sections, merged into text segment: */
   PROVIDE (__executable_start = 0x80000000); . = 0x80000000;
@@ -325,6 +326,10 @@ SECTIONS
     *(.flash_nvram3)
   } >FLASH AT>FLASH :FLASH_NVRAM3
 
+  .flash_nvram4   ORIGIN(FLASH) + LENGTH(FLASH) - (__flash0_nvram_size__ + __flash1_nvram_size__ + __flash2_nvram_size__ + __flash3_nvram_size__ + __flash4_nvram_size__) (NOLOAD):  /* 28may15: config */
+  {
+    *(.flash_nvram4)
+  } >FLASH AT>FLASH :FLASH_NVRAM4
 
   .userpage       : { *(.userpage .userpage.*) } >USERPAGE AT>USERPAGE :USERPAGE
   /DISCARD/ : { *(.note.GNU-stack) }
