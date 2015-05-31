@@ -718,11 +718,13 @@ void check_led_brd_side_lifetimes(void)
 
 // ADC Configuration
 adcifa_opt_t adc_config_t = {
-	.frequency                = 1000000,        // ADC frequency (Hz)
+//30may15 experiment	.frequency                = 1000000,        // ADC frequency (Hz)
+	.frequency                = 2000000,        // ADC frequency (Hz) 30may15 experiment
 //26apr15	.reference_source         = ADCIFA_ADCREF0, // Reference Source
-	.reference_source		  = ADCIFA_ADCREF,  // Reference Source 26apr15
+//31may15 experiment	.reference_source		  = ADCIFA_ADCREF,  // Reference Source 26apr15
+	.reference_source = ADCIFA_REF1V,			//31may15 experiment
 	.sample_and_hold_disable  = false,    		// Disable Sample and Hold Time
-	.single_sequencer_mode    = false,   		// Single Sequencer Mode
+	.single_sequencer_mode    = true,   		// Single Sequencer Mode change to true 30may15
 	.free_running_mode_enable = false,    		// Free Running Mode
 	.sleep_mode_enable        = false,    		// Sleep Mode
 	.mux_settle_more_time     = false     		// Multiplexer Settle Time
@@ -735,7 +737,7 @@ adcifa_sequencer_opt_t adcifa_sequence_opt = {
 	ADCIFA_TRGSEL_SOFT,
 //26apr15	ADCIFA_SOCB_ALLSEQ,
 	ADCIFA_SOCB_SINGLECONV, //26apr15
-	ADCIFA_SH_MODE_OVERSAMP,
+	ADCIFA_SH_MODE_STANDARD, //30may15
 	ADCIFA_HWLA_NOADJ,
 	ADCIFA_SA_NO_EOS_SOFTACK
 };
@@ -746,22 +748,22 @@ adcifa_sequence_conversion_opt_seq0_shelf[4] = {
 	{
 		INPUT1_ADC_INP,
 		INPUT1_ADC_INN,
-		ADCIFA_SHG_8
+		ADCIFA_SHG_1
 	},
 	{
 		INPUT2_ADC_INP,
 		INPUT2_ADC_INN,
-		ADCIFA_SHG_8
+		ADCIFA_SHG_1
 	},
 	{
 		INPUT3_ADC_INP,
 		INPUT3_ADC_INN,
-		ADCIFA_SHG_8
+		ADCIFA_SHG_1
 	},
 	{
 		INPUT4_ADC_INP,
 		INPUT4_ADC_INN,
-		ADCIFA_SHG_8
+		ADCIFA_SHG_1
 	}
 };
 
@@ -785,6 +787,10 @@ int16_t adc_process_task(unsigned char shelfIdx)
 		if (adcifa_get_values_from_sequencer(adcifa, 0, &adcifa_sequence_opt, &adc_values_seq0) == ADCIFA_STATUS_COMPLETED) 
 		{
 			bluesense_buf[shelfIdx] = adc_values_seq0;
+//30may15			if (bluesense_buf[shelfIdx] & 0x8000) //30may15 this number is 2's complement, we should just set negative numbers to 0
+//30may15			{
+//30may15				bluesense_buf[shelfIdx] = 0;
+//30may15			}
 			return bluesense_buf[shelfIdx];
 		}
 	}
@@ -801,20 +807,37 @@ enum {
 unsigned char check_shelf_for_devices(unsigned char shelfPosition);
 unsigned char check_shelf_for_devices(unsigned char shelfPosition)
 {
-	U16 bluesense;
+	U16 bluesense[8] = {0,0,0,0,0,0,0,0};
+	unsigned long bluesenseAccumulated = 0;
+	unsigned int bluesenseAvg = 0;
+	
+	char str[80];
 	
 	led_shelf(shelfPosition, LED_ON); //TODO: do we finish this task fast enough to not check the door latch in here? Can't have LEDs on if the door opens
 	
-	cpu_delay_ms(50, EC_CPU_CLOCK_FREQ);
+	cpu_delay_ms(100, EC_CPU_CLOCK_FREQ); //30may15 was 50ms, trying 100 to see if we can get more consistent
 		
 	//Read bluesense for this shelf
-	bluesense = 0;
-	bluesense = adc_process_task(shelfPosition);
 
+	for (int i=0; i<8; i++)
+	{
+		bluesense[i] = adc_process_task(shelfPosition);
+		bluesenseAccumulated += bluesense[i];
+	}
+	
+	bluesenseAvg = bluesenseAccumulated/8;
+	
 	led_shelf(shelfPosition, LED_OFF);
 	
+	memset(str,0x00, 80);
 
-	if (bluesense > 0x800)
+	for (int i=0; i<8; i++)
+	{
+		sprintf(str, "shelf %d: bluesense[%d]=0x%X\r\n", shelfPosition, i, bluesense[i]);
+		print_ecdbg(str);
+	}
+
+	if ((bluesenseAvg < 0x300) ||  (bluesenseAvg & 0x8000))//full range for 12 bit number is 0xFFF, but this number is 2's complement meaning it can (and it does) go negative
 	{
 		return DEVICES_PRESENT;
 	}
@@ -1135,6 +1158,7 @@ volatile int32_t zoom_view_id;
  *
  *
  */
+
 void adc_process_init(void);
 void adc_process_init(void)
 {
@@ -1148,6 +1172,7 @@ void adc_process_init(void)
 		{INPUT3_ADC_PIN, INPUT3_ADC_FUNCTION},
 		{INPUT4_ADC_PIN, INPUT4_ADC_FUNCTION}
 	};
+
 
 	// Assign and enable GPIO pins to the ADC function.
 	gpio_enable_module(ADCIFA_GPIO_MAP,
@@ -2927,7 +2952,7 @@ void show_sw_version(void);
 void show_sw_version(void)
 {
 	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
-	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.038\r\n");
+	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.049\r\n");
 
 }
 
@@ -3420,7 +3445,8 @@ int main(void)
 
 	// Initialize USART again after changing the system clock
 	init_ecdbg_rs232(FPBA_HZ);
-	init_display_rs232(FPBA_HZ);
+//30may15	init_display_rs232(FPBA_HZ);
+	init_display_rs232(FOSC0);//experiment to see if this fixes the display, haven't tested the code with the display in a month and it doesn't work now 30may15
 	
 	show_sw_version();
 
