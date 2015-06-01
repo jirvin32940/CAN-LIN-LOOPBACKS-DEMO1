@@ -180,6 +180,8 @@ t_cpu_time oneMinuteTimer;
 t_cpu_time cleanTimer;
 t_cpu_time debugTimer;
 
+t_cpu_time mfpExperimentTimer;
+
 unsigned char electroclaveState;
 
 
@@ -539,7 +541,7 @@ void init_io(void)
 	ioFlags = (GPIO_DIR_OUTPUT | GPIO_INIT_HIGH);
 	gpio_configure_pin(ECLAVE_LED_OEn, ioFlags);
 
-	ioFlags = (GPIO_DIR_OUTPUT | GPIO_INIT_LOW); //high=1x multiplier, low=4x multiplier 10apr15
+	ioFlags = (GPIO_DIR_OUTPUT | GPIO_INIT_LOW); //high=1x multiplier, low=4x multiplier 10apr15;
 	gpio_configure_pin(ECLAVE_MFP, ioFlags);
 
 }
@@ -718,8 +720,7 @@ void check_led_brd_side_lifetimes(void)
 
 // ADC Configuration
 adcifa_opt_t adc_config_t = {
-//30may15 experiment	.frequency                = 1000000,        // ADC frequency (Hz)
-	.frequency                = 2000000,        // ADC frequency (Hz) 30may15 experiment
+	.frequency                = 1000000,        // ADC frequency (Hz)
 //26apr15	.reference_source         = ADCIFA_ADCREF0, // Reference Source
 //31may15 experiment	.reference_source		  = ADCIFA_ADCREF,  // Reference Source 26apr15
 	.reference_source = ADCIFA_REF1V,			//31may15 experiment
@@ -2952,7 +2953,7 @@ void show_sw_version(void);
 void show_sw_version(void)
 {
 	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
-	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.049\r\n");
+	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.053\r\n");
 
 }
 
@@ -3486,11 +3487,34 @@ int main(void)
 	gpio_set_pin_low(ECLAVE_PSUPPLY_ONn); //turn the leds on first and then the power supply
 	
 	cpu_set_timeout(EC_ONE_SECOND/2, &debugTimer);
-
+	cpu_set_timeout((5 * EC_ONE_SECOND), &mfpExperimentTimer); //experiment 31may15
 
 	// Main loop
 	while (true) 
 	{
+
+#if 0 //leave MFP low for now 31may15
+		/* experiment 31may15 */
+		if (cpu_is_timeout(&mfpExperimentTimer))
+		{
+			static unsigned char toggle = 0;
+			
+			cpu_stop_timeout(&mfpExperimentTimer);
+			
+			if (toggle)
+			{
+				gpio_set_pin_low(ECLAVE_MFP);
+				toggle = 0;				
+			}
+			else
+			{
+				gpio_set_pin_high(ECLAVE_MFP);
+				toggle = 1;				
+			}
+			cpu_set_timeout((5 * EC_ONE_SECOND), &mfpExperimentTimer);			
+		}
+#endif
+
 		switch(electroclaveState)
 		{
 			case STATE_EC_IDLE:
@@ -3526,11 +3550,12 @@ int main(void)
 				
 				if (num_active_shelves() != 0) {
 					electroclaveState = STATE_START_SANITIZE;
-					print_ecdbg("Start sanitizing\r\n");
+					print_ecdbg("Sanitizing\r\n");
 					display_text(IDX_CLEAR);
 					cpu_delay_ms(500, EC_CPU_CLOCK_FREQ);
 					display_text(IDX_CLEANING);
-					cpu_delay_ms(3000, EC_CPU_CLOCK_FREQ); //give display time to update, scroll all the way across
+					displayTimerSeconds = cpu_ms_2_cy(8000, EC_CPU_CLOCK_FREQ); //8 seconds per "shelf" display is enough time for the text to scroll twice
+					cpu_set_timeout(displayTimerSeconds, &displayTimer);
 				}
 				else {
 					electroclaveState = STATE_START_CLEAN;
@@ -3564,8 +3589,6 @@ int main(void)
 					}
 				}
 				
-				displayTimerSeconds = cpu_ms_2_cy(8000, EC_CPU_CLOCK_FREQ); //8 seconds per "shelf" display is enough time for the text to scroll twice
-				cpu_set_timeout(displayTimerSeconds, &displayTimer);
 				
 #if 0 //DEBUG: set this to seconds not minutes so we can debug this logic faster 11may15				
 				cpu_set_timeout((sanitizeMinutes * 60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &sanitizeTimer);
