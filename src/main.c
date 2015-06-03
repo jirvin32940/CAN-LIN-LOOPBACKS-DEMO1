@@ -179,10 +179,29 @@ t_cpu_time sanitizeTimer;
 t_cpu_time oneMinuteTimer;
 t_cpu_time cleanTimer;
 t_cpu_time debugTimer;
+t_cpu_time errorDisplayTimer;
 
 t_cpu_time mfpExperimentTimer;
 
-unsigned char electroclaveState;
+
+enum {
+	STATE_EC_IDLE,
+	STATE_DOOR_LATCHED,
+	STATE_ACTION_PB_PRESSED,
+	STATE_ACTION_PB_RELEASED,
+	STATE_START_SANITIZE,
+	STATE_SANITIZE,
+	STATE_START_CLEAN,
+	STATE_CLEAN,
+	STATE_CHASSIS_ERROR,
+	STATE_SHUTDOWN_PROCESSES
+};
+
+
+
+unsigned char electroclaveState  = STATE_EC_IDLE; //start here unless we detect any errors on power up
+unsigned char errorDisplayState = 0;
+unsigned char displayChanged = 0;
 
 
 
@@ -639,6 +658,8 @@ void read_led_board_serial_ids(void)
 				sysErr.ledBrdSerialIdCsum |= BIT(i); //SE_FAIL;
 				ledBrd[i].present = 0; //crc8 wasn't valid for this ID chip, don't trust the board
 				print_ecdbg("Invalid serial ID checksum.\r\n");
+				
+				electroclaveState = STATE_CHASSIS_ERROR;
 			}
 		}
 	}
@@ -685,17 +706,18 @@ unsigned char check_led_brd_side_lifetime(unsigned char sideIdx)
 /*
  * Since we have to calculate the hours to see if the shelf is valid, finish out the calculations for the sanitizing time also. We'll need it later.
  */
-	intensity = ((0.00002 * hours * hours) - (0.0699 * hours) + 92.879);
+	intensity = ((0.00002 * hours * hours) - (0.0699 * hours) + 91.879);
 		
 	ledBrdSide[sideIdx].sanitizeMinutes = (c.initialDTE * 100)/intensity; //Shortest sanitize time is 20 minutes. Sanitize time increases as LED intensity drops with usage. Sanitize time is around 49 minutes when usage is at 2000 hours.
 	
-	if (hours < 1999)
+	if (hours < 2001)
 	{
 		return LED_BOARD_SIDE_WITHIN_LIFETIME_LIMIT;
 	}
 	else
 	{
 		return LED_BOARD_SIDE_PAST_LIFETIME_LIMIT;
+		electroclaveState = STATE_CHASSIS_ERROR;
 	}
 }
 
@@ -823,7 +845,15 @@ unsigned char check_shelf_for_devices(unsigned char shelfPosition)
 	for (int i=0; i<8; i++)
 	{
 		bluesense[i] = adc_process_task(shelfPosition);
-		bluesenseAccumulated += bluesense[i];
+		
+		if (bluesense[i] & 0x8000) //don't try to average negative numbers
+		{
+			bluesenseAccumulated += 0;
+		}
+		else
+		{
+			bluesenseAccumulated += bluesense[i];
+		}
 	}
 	
 	bluesenseAvg = bluesenseAccumulated/8;
@@ -886,6 +916,7 @@ void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned 
 					print_ecdbg_num(i);
 					print_ecdbg(" ");
 					sysErr.topdrive |= BIT(i); //SE_FAIL
+					electroclaveState = STATE_CHASSIS_ERROR;
 				}
 			}
 			
@@ -894,6 +925,7 @@ void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned 
 			if (eflag1 != 0)
 			{
 				print_ecdbg("ERROR on unused channels: PCA9952 - Controller board U7\r\n");
+				electroclaveState = STATE_CHASSIS_ERROR;
 			}
 			
 			break;
@@ -909,6 +941,7 @@ void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned 
 					print_ecdbg_num(i);
 					print_ecdbg(" ");
 					sysErr.botdrive |= BIT(i); //SE_FAIL;
+					electroclaveState = STATE_CHASSIS_ERROR;
 				}
 			}
 			
@@ -920,6 +953,7 @@ void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned 
 					print_ecdbg_num((i+8));
 					print_ecdbg(" ");
 					sysErr.botdrive |= BIT(i+8); //SE_FAIL;
+					electroclaveState = STATE_CHASSIS_ERROR;
 				}
 			}
 			
@@ -928,6 +962,7 @@ void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned 
 			if ((eflag1 & 0xF0) != 0)
 			{
 				print_ecdbg("ERROR on unused channels: PCA9952 - Controller board U8\r\n");
+				electroclaveState = STATE_CHASSIS_ERROR;
 			}
 			break;
 	}
@@ -1225,17 +1260,6 @@ static void twi_init(void)
 }
 
 
-enum {
-	STATE_EC_IDLE,
-	STATE_DOOR_LATCHED,
-	STATE_ACTION_PB_PRESSED,
-	STATE_ACTION_PB_RELEASED,
-	STATE_START_SANITIZE,
-	STATE_SANITIZE,
-	STATE_START_CLEAN,
-	STATE_CLEAN,
-	STATE_SHUTDOWN_PROCESSES
-};
 
 unsigned char calc_sanitize_time(unsigned char shelfIdx);
 unsigned char calc_sanitize_time(unsigned char shelfIdx)
@@ -2221,6 +2245,8 @@ unsigned char find_first_open_usage_slot(void)
 	print_ecdbg("No more room for LED board info. Cannot track minute usage for additional boards.\r\n");
 	
 	sysErr.usageStructsFull = FAIL;
+	electroclaveState = STATE_CHASSIS_ERROR;
+
 	
 	return USAGE_FULL; //Error, no open slots
 }
@@ -2761,13 +2787,13 @@ void init_led_board_info(void)
 		{
 			print_ecdbg("Flash usage area 0 ERROR.\r\n");
 			sysErr.flashArea |= BIT(0); //SE_FAIL;
-			chassis_error();
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		if (test_flash(1) == ERROR)
 		{
 			print_ecdbg("Flash usage area 1 ERROR.\r\n");
 			sysErr.flashArea|= BIT(1); //SE_FAIL;
-			chassis_error();
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		add_new_led_board_sides_to_usage(0);
 		load_usageIdx_to_ledBrdSide(0);
@@ -2800,7 +2826,7 @@ void init_led_board_info(void)
 			print_ecdbg_num(older);
 			print_ecdbg(" ERROR.\r\n");
 			sysErr.flashArea|= BIT(older); //SE_FAIL;
-			chassis_error();
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 
 		add_new_led_board_sides_to_usage(newer);
@@ -2815,7 +2841,7 @@ void init_led_board_info(void)
 			print_ecdbg_num(newer);
 			print_ecdbg(" ERROR.\r\n");
 			sysErr.flashArea |= BIT(newer); //SE_FAIL;
-			chassis_error();
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 
 		write_usage_to_flash(newer);
@@ -2841,7 +2867,7 @@ void init_led_board_info(void)
 			print_ecdbg_num(bad);
 			print_ecdbg(" ERROR.\r\n");
 			sysErr.flashArea |= BIT(bad); //SE_FAIL;
-			chassis_error();
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		
 		add_new_led_board_sides_to_usage(good);
@@ -2856,7 +2882,7 @@ void init_led_board_info(void)
 			print_ecdbg_num(good);
 			print_ecdbg(" ERROR.\r\n");
 			sysErr.flashArea |= BIT(good); //SE_FAIL;
-			chassis_error();
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		
 		write_usage_to_flash(good);
@@ -2952,8 +2978,9 @@ void init_led_board_info(void)
 void show_sw_version(void);
 void show_sw_version(void)
 {
-	print_ecdbg("\r\nELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc.\r\n");
-	print_ecdbg("Hardware Version: Classic +++ Software Version: 0.053\r\n");
+	print_ecdbg("\r\n*---------------------------------------------------*\r\n");
+	print_ecdbg(    "ELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc. \r\n");
+	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.057\r\n");
 
 }
 
@@ -3001,7 +3028,7 @@ void show_chassis_status_info(void)
 			if (lSideIdx != NO_LED_BOARD_PRESENT)
 			{
 				lSideUsageIdx = ledBrdSide[lSideIdx].ushdwIdx;	
-				ledBrdSide[uSideIdx].maxUsageReached = !check_led_brd_side_lifetime(lSideIdx);
+				ledBrdSide[lSideIdx].maxUsageReached = !check_led_brd_side_lifetime(lSideIdx);
 				sanMinutesLower = ledBrdSide[lSideIdx].sanitizeMinutes;
 #ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 				lHrs = usageShdw[0].u[lSideUsageIdx].minutes/60;
@@ -3104,13 +3131,14 @@ void show_chassis_sysErr(void)
 /*
  *	LED Driver: Top
  */
-	sprintf(str, "LED Driver: TOP (7..0)                 ");
+	sprintf(str, "LED Driver: TOP (0..7)                 ");
 	
-	for (int i=8; i>0; i--)
+	for (int i=0; i<7; i++)
 	{
-		if ((sysErr.topdrive & BIT(i-1)))
+		if ((sysErr.topdrive & BIT(i)))
 		{
 			strcat(str,"F ");			
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		else
 		{
@@ -3124,13 +3152,14 @@ void show_chassis_sysErr(void)
 /*
  *	LED Driver: Bottom
  */
-	sprintf(str, "LED Driver: BOTTOM (11..0)             ");
+	sprintf(str, "LED Driver: BOTTOM (0..11)             ");
 	
-	for (int i=12; i>0; i--)
+	for (int i=0; i<12; i++)
 	{
-		if ((sysErr.botdrive & BIT(i-1)))
+		if ((sysErr.botdrive & BIT(i)))
 		{
 			strcat(str,"F ");			
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		else
 		{
@@ -3152,6 +3181,7 @@ void show_chassis_sysErr(void)
 		if ((sysErr.flashArea & BIT(i)) == SE_FAIL)
 		{
 			strcat(str, "F ");
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		else
 		{
@@ -3172,6 +3202,7 @@ void show_chassis_sysErr(void)
 		if ((sysErr.ledBrdSerialIdCsum & BIT(i)) == SE_FAIL)
 		{
 			strcat(str, "F ");
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		else
 		{
@@ -3193,6 +3224,7 @@ void show_chassis_sysErr(void)
 		if (ledBrdSide[i].maxUsageReached)
 		{
 			strcat(str, "F ");
+			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		else
 		{
@@ -3212,6 +3244,7 @@ void show_chassis_sysErr(void)
 	if (sysErr.usageStructsFull == SE_FAIL)
 	{
 		strcat(str, "F \r\n");
+		electroclaveState = STATE_CHASSIS_ERROR;
 	}
 	else
 	{
@@ -3474,8 +3507,6 @@ int main(void)
 	test_led_driver_channels();
 	
 	
-	electroclaveState = STATE_EC_IDLE;
-	
 	init_led_board_info();
 
 	show_chassis_status_info();
@@ -3702,6 +3733,89 @@ int main(void)
 				}
 				break;
 				
+			
+			case STATE_CHASSIS_ERROR:
+				//Shutdown all processes that could harm the user or equipment if the door is open
+				for (int i=0; i< NUM_SHELVES; i++)
+				{
+					led_shelf(i, LED_OFF); //turn off every shelf. (doesn't hurt to make sure that even non-active shelves are off.)
+				}
+				
+				
+				if (cpu_is_timeout(&errorDisplayTimer))
+				{
+					cpu_stop_timeout(&errorDisplayTimer);
+
+					while(1)
+					{
+						switch(errorDisplayState)
+						{
+							case 0:
+								display_text(IDX_ERROR);
+								displayChanged = 1;
+								cpu_set_timeout(8*EC_ONE_SECOND, &errorDisplayTimer);
+								errorDisplayState = 1;
+								break;
+							case 1:
+								if ((ledBrdSide[LED_BRD_0_BOT].maxUsageReached || ledBrdSide[LED_BRD_1_TOP].maxUsageReached) ||
+									(sysErr.topdrive & BIT(0)) || (sysErr.topdrive & BIT(1)) ||
+									(sysErr.botdrive & BIT(0)) || (sysErr.botdrive & BIT(1)) || (sysErr.botdrive & BIT(2)))
+								{
+									display_text(IDX_SHELF1);
+									displayChanged = 1;
+									cpu_set_timeout(8*EC_ONE_SECOND, &errorDisplayTimer);
+								}
+								errorDisplayState = 2;
+								break;
+							case 2:
+								if ((ledBrdSide[LED_BRD_1_BOT].maxUsageReached || ledBrdSide[LED_BRD_2_TOP].maxUsageReached) ||
+									(sysErr.topdrive & BIT(2)) || (sysErr.topdrive & BIT(3)) ||
+									(sysErr.botdrive & BIT(3)) || (sysErr.botdrive & BIT(4)) || (sysErr.botdrive & BIT(5)))
+								{
+									display_text(IDX_SHELF2);
+									displayChanged = 1;
+									cpu_set_timeout(8*EC_ONE_SECOND, &errorDisplayTimer);
+								}
+								errorDisplayState = 3;
+								break;
+							case 3:
+								if ((ledBrdSide[LED_BRD_2_BOT].maxUsageReached || ledBrdSide[LED_BRD_3_TOP].maxUsageReached) ||
+									(sysErr.topdrive & BIT(4)) || (sysErr.topdrive & BIT(5)) ||
+									(sysErr.botdrive & BIT(6)) || (sysErr.botdrive & BIT(7)) || (sysErr.botdrive & BIT(8)))
+								{
+									display_text(IDX_SHELF3);
+									displayChanged = 1;
+									cpu_set_timeout(8*EC_ONE_SECOND, &errorDisplayTimer);
+								}
+								errorDisplayState = 4;
+								break;
+							case 4:
+								if ((ledBrdSide[LED_BRD_3_BOT].maxUsageReached || ledBrdSide[LED_BRD_4_TOP].maxUsageReached) ||
+									(sysErr.topdrive & BIT(6)) || (sysErr.topdrive & BIT(7)) ||
+									(sysErr.botdrive & BIT(9)) || (sysErr.botdrive & BIT(10)) || (sysErr.botdrive & BIT(11)))
+								{
+									display_text(IDX_SHELF4);
+									displayChanged = 1;
+									cpu_set_timeout(8*EC_ONE_SECOND, &errorDisplayTimer);
+								}
+								errorDisplayState = 0;
+								break;
+							default:
+								errorDisplayState = 0;
+								break;
+						} //switch(errorDisplayState)
+						
+						if (displayChanged)
+						{
+							displayChanged = 0;
+							break; //get out of while loop and wait until we need to update the display again
+						}
+						
+					} //while(1)
+
+				} //if (cpu_is_timeout(&errorDisplayTimer))
+				break;
+				
 			case STATE_SHUTDOWN_PROCESSES:
 				//Shutdown all processes that could harm the user or equipment if the door is open
 				for (int i=0; i< NUM_SHELVES; i++)
@@ -3728,15 +3842,21 @@ int main(void)
 				{
 					case STATE_SANITIZE:
 						display_text(IDX_DIRTY);
+						electroclaveState = STATE_SHUTDOWN_PROCESSES;
+						print_ecdbg("Door latch opened, shutting down all processes\r\n");
+						break;
+						
+					case STATE_CHASSIS_ERROR:
+						display_text(IDX_ERROR);
 						break;
 					
 					default:
 						display_text(IDX_CLEAN);
+						electroclaveState = STATE_SHUTDOWN_PROCESSES;
+						print_ecdbg("Door latch opened, shutting down all processes\r\n");
 						break;
 				}
 
-				electroclaveState = STATE_SHUTDOWN_PROCESSES;
-				print_ecdbg("Door latch opened, shutting down all processes\r\n");
 				firstTimeThroughDoorLatch = 0;
 				
 			}
