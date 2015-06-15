@@ -106,7 +106,7 @@ unsigned char minute_count(unsigned char * pMinuteBits);
 void reset_minutes(unsigned char * pMinuteBits);
 unsigned char inc_minutes(unsigned char * pMinuteBits);
 
-unsigned char firstTimeThroughDoorLatch = 1;
+unsigned char firstDoorOpenSinceIdle = 1;
 unsigned char firstTimeThroughPCA9952 = 1;
 
 
@@ -968,7 +968,7 @@ void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned 
 	}
 }
 
-unsigned char numActiveShelves;
+unsigned char numActiveShelves, numPresentShelves;
 
 unsigned char topEflag0 = 0, topEflag1 = 0, botEflag0 = 0, botEflag1 = 0;
 
@@ -1069,6 +1069,7 @@ void set_shelves_active_inactive(void)
 	test_led_driver_channels();
 	
 	numActiveShelves = 0;
+	numPresentShelves = 0;
 	
 	for (int i=0; i<NUM_SHELVES; i++)
 	{
@@ -1078,49 +1079,65 @@ void set_shelves_active_inactive(void)
 	
 	/* check shelf 0 */
 	if (shelf[0].present &&
-		shelf[0].devicesPresent && 
 		(!ledBrdSide[LED_BRD_0_BOT].maxUsageReached) &&
 		(!ledBrdSide[LED_BRD_1_TOP].maxUsageReached) )
 	{
-		shelf[0].active = SHELF_ACTIVE;
-		numActiveShelves++;
-		print_ecdbg("Shelf 0 active\r\n");
+		numPresentShelves++;
+		
+		if (shelf[0].devicesPresent)
+		{
+			shelf[0].active = SHELF_ACTIVE;
+			numActiveShelves++;
+			print_ecdbg("Shelf 0 active\r\n");
+		}
 	}
 	
 	/* check shelf 1 */
 	
 	if (shelf[1].present &&
-	shelf[1].devicesPresent &&
 	(!ledBrdSide[LED_BRD_1_BOT].maxUsageReached) &&
 	(!ledBrdSide[LED_BRD_2_TOP].maxUsageReached) )
 	{
-		shelf[1].active = SHELF_ACTIVE;
-		numActiveShelves++;
-		print_ecdbg("Shelf 1 active\r\n");
+		numPresentShelves++;
+		
+		if (shelf[1].devicesPresent)
+		{
+			shelf[1].active = SHELF_ACTIVE;
+			numActiveShelves++;
+			print_ecdbg("Shelf 1 active\r\n");
+		}
 	}
 	
 	/* check shelf 2 */
 	
 	if (shelf[2].present &&
-	shelf[2].devicesPresent &&
 	(!ledBrdSide[LED_BRD_2_BOT].maxUsageReached) &&
 	(!ledBrdSide[LED_BRD_3_TOP].maxUsageReached) )
 	{
-		shelf[2].active = SHELF_ACTIVE;
-		numActiveShelves++;
-		print_ecdbg("Shelf 2 active\r\n");
+		numPresentShelves++;
+		
+		if (shelf[2].devicesPresent)
+		{
+			shelf[2].active = SHELF_ACTIVE;
+			numActiveShelves++;
+			print_ecdbg("Shelf 2 active\r\n");
+		}
 	}
 	
 	/* check shelf 3 */
 	
 	if (shelf[3].present &&
-	shelf[3].devicesPresent &&
 	(!ledBrdSide[LED_BRD_3_BOT].maxUsageReached) &&
 	(!ledBrdSide[LED_BRD_4_TOP].maxUsageReached) )
 	{
-		shelf[3].active = SHELF_ACTIVE;
-		numActiveShelves++;
-		print_ecdbg("Shelf 3 active\r\n");
+		numPresentShelves++;
+		
+		if (shelf[3].devicesPresent)
+		{
+			shelf[3].active = SHELF_ACTIVE;
+			numActiveShelves++;
+			print_ecdbg("Shelf 3 active\r\n");
+		}
 	}
 }
 
@@ -1128,6 +1145,12 @@ unsigned char num_active_shelves(void);
 unsigned char num_active_shelves(void)
 {
 	return numActiveShelves;
+}
+
+unsigned char num_present_shelves(void);
+unsigned char num_present_shelves(void)
+{
+	return numPresentShelves;
 }
 
 
@@ -2980,7 +3003,7 @@ void show_sw_version(void)
 {
 	print_ecdbg("\r\n*---------------------------------------------------*\r\n");
 	print_ecdbg(    "ELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc. \r\n");
-	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.057\r\n");
+	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.062\r\n");
 
 }
 
@@ -3555,7 +3578,7 @@ int main(void)
 //					display_text(IDX_CLEAR);
 					display_text(IDX_READY);
 					electroclaveState = STATE_DOOR_LATCHED;
-					firstTimeThroughDoorLatch = 1;
+					firstDoorOpenSinceIdle = 1;
 				}
 				break;
 				
@@ -3582,23 +3605,28 @@ int main(void)
 				if (num_active_shelves() != 0) {
 					electroclaveState = STATE_START_SANITIZE;
 					print_ecdbg("Sanitizing\r\n");
-					display_text(IDX_CLEAR);
-					cpu_delay_ms(500, EC_CPU_CLOCK_FREQ);
+//13jun15					display_text(IDX_CLEAR);
+//13jun15					cpu_delay_ms(500, EC_CPU_CLOCK_FREQ);
 					display_text(IDX_CLEANING);
 					displayTimerSeconds = cpu_ms_2_cy(8000, EC_CPU_CLOCK_FREQ); //8 seconds per "shelf" display is enough time for the text to scroll twice
 					cpu_set_timeout(displayTimerSeconds, &displayTimer);
 				}
-				else {
-					electroclaveState = STATE_START_CLEAN;
-					print_ecdbg("No shelves, no devices or shelves are past lifetime\r\n");
-//					display_text(IDX_CLEAR);
+				else if (num_present_shelves() != 0){
+					electroclaveState = STATE_EC_IDLE;
+					print_ecdbg("At least one shelf is present, but no devices to be cleaned.\r\n");
 					display_text(IDX_READY);
+				}
+				else
+				{
+					electroclaveState = STATE_CHASSIS_ERROR;
+					print_ecdbg("No shelves, or shelves are past lifetime\r\n");
+					display_text(IDX_ERROR);
 				}
 				break;
 				
 			case STATE_START_SANITIZE:
-				display_text(IDX_CLEAR);
-				cpu_delay_ms(500, EC_CPU_CLOCK_FREQ); //half second TODO: figure out why this is here and get rid of it, don't like to just hang for no reason, especially when we need to be monitoring the door latch
+//13jun15				display_text(IDX_CLEAR);
+//13jun15				cpu_delay_ms(500, EC_CPU_CLOCK_FREQ); //half second TODO: figure out why this is here and get rid of it, don't like to just hang for no reason, especially when we need to be monitoring the door latch
 				
 				displayIdx = 0xFF; //this means not assigned yet
 				sanitizeMinutes = 0;
@@ -3832,16 +3860,24 @@ int main(void)
 		 */
 		if (!EC_DOOR_LATCHED) {
 		
-			if (firstTimeThroughDoorLatch)
+			if (firstDoorOpenSinceIdle)
 			{
 				door_latch_open_kill_all_shelves();
 
-				display_text(IDX_CLEAR);
-				cpu_delay_ms(500, EC_CPU_CLOCK_FREQ);
+//13jun15				display_text(IDX_CLEAR);
+//13jun15				cpu_delay_ms(500, EC_CPU_CLOCK_FREQ);
 				switch (electroclaveState)
 				{
+					case STATE_START_SANITIZE:
 					case STATE_SANITIZE:
 						display_text(IDX_DIRTY);
+						electroclaveState = STATE_SHUTDOWN_PROCESSES;
+						print_ecdbg("Door latch opened, shutting down all processes\r\n");
+						break;
+						
+					case STATE_START_CLEAN:
+					case STATE_CLEAN:
+						display_text(IDX_CLEAN);
 						electroclaveState = STATE_SHUTDOWN_PROCESSES;
 						print_ecdbg("Door latch opened, shutting down all processes\r\n");
 						break;
@@ -3851,13 +3887,13 @@ int main(void)
 						break;
 					
 					default:
-						display_text(IDX_CLEAN);
+						display_text(IDX_READY);
 						electroclaveState = STATE_SHUTDOWN_PROCESSES;
 						print_ecdbg("Door latch opened, shutting down all processes\r\n");
 						break;
 				}
 
-				firstTimeThroughDoorLatch = 0;
+				firstDoorOpenSinceIdle = 0;
 				
 			}
 		} //if (!EC_DOOR_LATCHED)
