@@ -710,6 +710,8 @@ unsigned char check_led_brd_side_lifetime(unsigned char sideIdx)
 		
 	ledBrdSide[sideIdx].sanitizeMinutes = (c.initialDTE * 100)/intensity; //Shortest sanitize time is 20 minutes. Sanitize time increases as LED intensity drops with usage. Sanitize time is around 49 minutes when usage is at 2000 hours.
 	
+	ledBrdSide[sideIdx].sanitizeMinutes = 60; //DEBUG hard code to 1 minute per Christian 24jun15 take this out later
+
 	if (hours < 2001)
 	{
 		return LED_BOARD_SIDE_WITHIN_LIFETIME_LIMIT;
@@ -717,7 +719,7 @@ unsigned char check_led_brd_side_lifetime(unsigned char sideIdx)
 	else
 	{
 		return LED_BOARD_SIDE_PAST_LIFETIME_LIMIT;
-		electroclaveState = STATE_CHASSIS_ERROR;
+//DEBUG 24jun15 need to function even with these errors for demo purposes		electroclaveState = STATE_CHASSIS_ERROR;
 	}
 }
 
@@ -916,7 +918,7 @@ void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned 
 					print_ecdbg_num(i);
 					print_ecdbg(" ");
 					sysErr.topdrive |= BIT(i); //SE_FAIL
-					electroclaveState = STATE_CHASSIS_ERROR;
+//DEBUG 24jun15 need to function even with these errors for demo purposes					electroclaveState = STATE_CHASSIS_ERROR;
 				}
 			}
 			
@@ -941,7 +943,7 @@ void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned 
 					print_ecdbg_num(i);
 					print_ecdbg(" ");
 					sysErr.botdrive |= BIT(i); //SE_FAIL;
-					electroclaveState = STATE_CHASSIS_ERROR;
+//DEBUG 24jun15 need to function even with these errors for demo purposes					electroclaveState = STATE_CHASSIS_ERROR;
 				}
 			}
 			
@@ -953,7 +955,7 @@ void print_pca9952_errors(unsigned char sideSel, unsigned char eflag0, unsigned 
 					print_ecdbg_num((i+8));
 					print_ecdbg(" ");
 					sysErr.botdrive |= BIT(i+8); //SE_FAIL;
-					electroclaveState = STATE_CHASSIS_ERROR;
+//DEBUG 24jun15 need to function even with these errors for demo purposes					electroclaveState = STATE_CHASSIS_ERROR;
 				}
 			}
 			
@@ -3003,7 +3005,7 @@ void show_sw_version(void)
 {
 	print_ecdbg("\r\n*---------------------------------------------------*\r\n");
 	print_ecdbg(    "ELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc. \r\n");
-	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.062\r\n");
+	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.064\r\n");
 
 }
 
@@ -3161,7 +3163,7 @@ void show_chassis_sysErr(void)
 		if ((sysErr.topdrive & BIT(i)))
 		{
 			strcat(str,"F ");			
-			electroclaveState = STATE_CHASSIS_ERROR;
+//DEBUG 24jun15 need to function even with these errors for demo purposes			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		else
 		{
@@ -3182,7 +3184,7 @@ void show_chassis_sysErr(void)
 		if ((sysErr.botdrive & BIT(i)))
 		{
 			strcat(str,"F ");			
-			electroclaveState = STATE_CHASSIS_ERROR;
+//DEBUG 24jun15 need to function even with these errors for demo purposes			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		else
 		{
@@ -3247,7 +3249,7 @@ void show_chassis_sysErr(void)
 		if (ledBrdSide[i].maxUsageReached)
 		{
 			strcat(str, "F ");
-			electroclaveState = STATE_CHASSIS_ERROR;
+//DEBUG 24jun15 need to function even with these errors for demo purposes			electroclaveState = STATE_CHASSIS_ERROR;
 		}
 		else
 		{
@@ -3475,8 +3477,7 @@ void service_ecdbg_input(void)
 /*! \brief Main File Section:
  *          - Initialization (CPU, TWI, Usart,...)
  */
-int main(void)
-{
+int main(void){
 	static unsigned char displayIdx = 0;
 	
 	// Initialize System Clock
@@ -3618,7 +3619,7 @@ int main(void)
 				}
 				else
 				{
-					electroclaveState = STATE_CHASSIS_ERROR;
+//DEBUG 24jun15 need to function even with these errors for demo purposes					electroclaveState = STATE_CHASSIS_ERROR;
 					print_ecdbg("No shelves, or shelves are past lifetime\r\n");
 					display_text(IDX_ERROR);
 				}
@@ -3750,8 +3751,9 @@ int main(void)
 #if 0 //DEBUG do this in seconds to debug logic 11may15				
 				cpu_set_timeout((20 * 60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer);
 #endif
-				cpu_set_timeout((20 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //DEBUG 11may15 
+//DEBUG 24jun15 change to 60 seconds for demo, put this line back in later				cpu_set_timeout((20 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //DEBUG 11may15 
 
+				cpu_set_timeout((60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //DEBUG 24jun15 change to 60 seconds for demo, remove later
 				break;	
 				
 			case STATE_CLEAN:
