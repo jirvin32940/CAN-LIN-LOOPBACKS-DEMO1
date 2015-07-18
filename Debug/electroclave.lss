@@ -10445,7 +10445,7 @@ void led_shelf(unsigned char shelf, unsigned char onOffn)
 80006916:	3a 20       	mov	r0,-94
 80006918:	30 2e       	mov	lr,2
 8000691a:	30 36       	mov	r6,3
-8000691c:	34 0d       	mov	sp,64
+8000691c:	35 0d       	mov	sp,80
 8000691e:	0a 00       	add	r0,r5
 80006920:	0d 0a       	ld.w	r10,r6++
 80006922:	2a 2a       	sub	r10,-94
@@ -18141,7 +18141,7 @@ void show_sw_version(void)
 	print_ecdbg(    "ELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc. \r\n");
 80009f88:	48 6c       	lddpc	r12,80009fa0 <show_sw_version+0x24>
 80009f8a:	f0 1f 00 05 	mcall	80009f9c <show_sw_version+0x20>
-	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.064\r\n");
+	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.065\r\n");
 80009f8e:	48 6c       	lddpc	r12,80009fa4 <show_sw_version+0x28>
 80009f90:	f0 1f 00 03 	mcall	80009f9c <show_sw_version+0x20>
 
@@ -18768,7 +18768,7 @@ void show_chassis_sysErr(void)
 8000a442:	10 9c       	mov	r12,r8
 8000a444:	f0 1f 00 da 	mcall	8000a7ac <show_chassis_sysErr+0x384>
 	
-	for (int i=0; i<7; i++)
+	for (int i=0; i<8; i++)
 8000a448:	30 08       	mov	r8,0
 8000a44a:	ef 48 ff ec 	st.w	r7[-20],r8
 8000a44e:	c3 38       	rjmp	8000a4b4 <show_chassis_sysErr+0x8c>
@@ -18815,12 +18815,12 @@ void show_chassis_sysErr(void)
  */
 	sprintf(str, "LED Driver: TOP (0..7)                 ");
 	
-	for (int i=0; i<7; i++)
+	for (int i=0; i<8; i++)
 8000a4aa:	ee f8 ff ec 	ld.w	r8,r7[-20]
 8000a4ae:	2f f8       	sub	r8,-1
 8000a4b0:	ef 48 ff ec 	st.w	r7[-20],r8
 8000a4b4:	ee f8 ff ec 	ld.w	r8,r7[-20]
-8000a4b8:	58 68       	cp.w	r8,6
+8000a4b8:	58 78       	cp.w	r8,7
 8000a4ba:	fe 9a ff cb 	brle	8000a450 <show_chassis_sysErr+0x28>
 		{
 			strcat(str,"P ");

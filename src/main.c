@@ -3005,7 +3005,7 @@ void show_sw_version(void)
 {
 	print_ecdbg("\r\n*---------------------------------------------------*\r\n");
 	print_ecdbg(    "ELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc. \r\n");
-	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.064\r\n");
+	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.065\r\n");
 
 }
 
@@ -3158,7 +3158,7 @@ void show_chassis_sysErr(void)
  */
 	sprintf(str, "LED Driver: TOP (0..7)                 ");
 	
-	for (int i=0; i<7; i++)
+	for (int i=0; i<8; i++)
 	{
 		if ((sysErr.topdrive & BIT(i)))
 		{
