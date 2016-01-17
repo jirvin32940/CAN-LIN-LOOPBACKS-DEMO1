@@ -174,6 +174,7 @@ LEDBRDSIDE ledBrdSide[NUM_LED_BOARD_SIDES];
 unsigned long sanitizeMinutes;
 unsigned long tmpSanitizeMinutes;
 unsigned long displayTimerSeconds;
+unsigned char firstTimeSinceDoorLatched = 0;
 t_cpu_time displayTimer;
 t_cpu_time sanitizeTimer;
 t_cpu_time oneMinuteTimer;
@@ -710,7 +711,10 @@ unsigned char check_led_brd_side_lifetime(unsigned char sideIdx)
 		
 	ledBrdSide[sideIdx].sanitizeMinutes = (c.initialDTE * 100)/intensity; //Shortest sanitize time is 20 minutes. Sanitize time increases as LED intensity drops with usage. Sanitize time is around 49 minutes when usage is at 2000 hours.
 	
-	ledBrdSide[sideIdx].sanitizeMinutes = 60; //DEBUG hard code to 1 minute per Christian 24jun15 take this out later
+//	ledBrdSide[sideIdx].sanitizeMinutes = 60; //DEBUG hard code to 1 minute per Christian 24jun15 take this out later
+//	ledBrdSide[sideIdx].sanitizeMinutes = 255; //DEBUG hard code to 10 minutes to debug BOTDRIVE problem 31jul15 take this out later
+	ledBrdSide[sideIdx].sanitizeMinutes = 30; //DEBUG hard code to 30 minutes for sanitation tests 16jan16
+
 
 	if (hours < 2001)
 	{
@@ -1001,6 +1005,8 @@ void test_led_driver_channels(void)
 				led_shelf(i, LED_ON);
 			}
 		}
+		
+		cpu_delay_us(100,EC_CPU_CLOCK_FREQ); //maybe need this while testing LED boards with resistors in place of real LEDs 31july2015
 
 		PCA9952_write_reg(LED_TOP, PCA9952_MODE2, 0x40); //starts fault test
 		PCA9952_write_reg(LED_BOTTOM, PCA9952_MODE2, 0x40); //starts fault test
@@ -2972,7 +2978,7 @@ void init_led_board_info(void)
 		memset(&h, 0x00, sizeof(h));		//usage hours
 		memset(&m, 0x00, sizeof(m));		//usage minutes
 		memset(&c, 0x00, sizeof(c));		//configuration
-		c.initialDTE = 20; //gotta start somewhere
+		c.initialDTE = 30; //changed to 30 minutes for a sanitation test for new LEDs 16jan16
 
 		for (int i=0; i<5; i++)
 		{
@@ -3004,8 +3010,8 @@ void show_sw_version(void);
 void show_sw_version(void)
 {
 	print_ecdbg("\r\n*---------------------------------------------------*\r\n");
-	print_ecdbg(    "ELECTROCLAVE\r\nCopyright (c) 2015 Seal Shield, Inc. \r\n");
-	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.065\r\n");
+	print_ecdbg(    "ELECTROCLAVE\r\nCopyright (c) 2016 Seal Shield, Inc. \r\n");
+	print_ecdbg(    "Hardware Version: Classic +++ Software Version: 0.077\r\n");
 
 }
 
@@ -3479,6 +3485,7 @@ void service_ecdbg_input(void)
  */
 int main(void){
 	static unsigned char displayIdx = 0;
+	char mainStr[80];
 	
 	// Initialize System Clock
 	init_sys_clocks();
@@ -3576,6 +3583,7 @@ int main(void){
 				if (EC_DOOR_LATCHED) {
 					gpio_set_pin_low(ECLAVE_DEBUG_LED);
 					print_ecdbg("Door latch detected\r\n");
+					firstTimeSinceDoorLatched = 1;
 //					display_text(IDX_CLEAR);
 					display_text(IDX_READY);
 					electroclaveState = STATE_DOOR_LATCHED;
@@ -3599,10 +3607,16 @@ int main(void){
 				break;
 				
 			case STATE_ACTION_PB_RELEASED:
-				check_led_brd_side_lifetimes();
-				check_shelves_for_devices();
-				set_shelves_active_inactive();
-				
+
+				if (firstTimeSinceDoorLatched)
+				{
+					check_led_brd_side_lifetimes();
+					check_shelves_for_devices();
+					set_shelves_active_inactive();
+					
+					firstTimeSinceDoorLatched = 0;
+				}
+
 				if (num_active_shelves() != 0) {
 					electroclaveState = STATE_START_SANITIZE;
 					print_ecdbg("Sanitizing\r\n");
@@ -3650,10 +3664,16 @@ int main(void){
 				}
 				
 				
-#if 0 //DEBUG: set this to seconds not minutes so we can debug this logic faster 11may15				
-				cpu_set_timeout((sanitizeMinutes * 60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &sanitizeTimer);
-#endif
-				cpu_set_timeout((sanitizeMinutes * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &sanitizeTimer); //DEBUG take this out when done debugging logic, put it back to minutes 11may15
+//16jan16 #if 0 //DEBUG: set this to seconds not minutes so we can debug this logic faster 11may15
+				tmpSanitizeMinutes = cpu_ms_2_cy(1000,EC_CPU_CLOCK_FREQ);
+				tmpSanitizeMinutes *= 60;
+				tmpSanitizeMinutes *= sanitizeMinutes;
+				cpu_set_timeout(tmpSanitizeMinutes, &sanitizeTimer); //16jan16 above calcs broken out to debug why this doesn't actually wind up being 30 minutes
+//16jan16 #endif
+//16jan16 we really want minutes right now				cpu_set_timeout((sanitizeMinutes * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &sanitizeTimer); //DEBUG take this out when done debugging logic, put it back to minutes 11may15
+				
+				sprintf(mainStr, "sanitizeMinutes: %ld tmpSanitizeMinutes: %ld\r\n", sanitizeMinutes, tmpSanitizeMinutes);
+				print_ecdbg(mainStr);
 
 #ifdef SERIAL_ID_AND_ALL_USAGE_COMBINED
 				usageShdw[0].totalSanitationCycles++;
@@ -3737,7 +3757,7 @@ int main(void){
 					
 					for (int i=0; i< NUM_SHELVES; i++)
 					{
-						led_shelf(i, LED_OFF); //turn off every shelf. (doesn't hurt to make sure that even non-active shelves are off.)
+//DEBUG 16jan16 THIS IS REALLY SLOPPY, WANT TO KEEP THE LEDS ON FOR 30 MINUTES BUT THE TIMER STUFF DOESN'T SEEM TO WORK THAT LONG, SO WE ARE JUST NOT GOING TO TURN THE SHELVES OFF						led_shelf(i, LED_OFF); //turn off every shelf. (doesn't hurt to make sure that even non-active shelves are off.)
 					}
 					cpu_stop_timeout(&sanitizeTimer);
 					print_ecdbg("Shelf clean\r\n");
@@ -3753,7 +3773,8 @@ int main(void){
 #endif
 //DEBUG 24jun15 change to 60 seconds for demo, put this line back in later				cpu_set_timeout((20 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //DEBUG 11may15 
 
-				cpu_set_timeout((60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //DEBUG 24jun15 change to 60 seconds for demo, remove later
+//				cpu_set_timeout((60 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //DEBUG 24jun15 change to 60 seconds for demo, remove later
+				cpu_set_timeout((3 * cpu_ms_2_cy(1000, EC_CPU_CLOCK_FREQ)), &cleanTimer); //DEBUG 31jul15 change to 3 seconds BOTDRIVE, remove later
 				break;	
 				
 			case STATE_CLEAN:
